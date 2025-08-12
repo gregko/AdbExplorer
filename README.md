@@ -1,7 +1,7 @@
 # ADB Explorer
 
 
-A modern Windows file manager for Android devices that provides a familiar Explorer-like interface for browsing and managing files on your Android device via ADB (Android Debug Bridge).
+A modern Windows file manager for Android devices that provides a familiar Explorer-like interface for browsing and managing files on your Android emulator or device via ADB (Android Debug Bridge).
 
 In developing and testing my Android app, I needed to access files and folders in the emulators. Got tired with the clunky file explorer that Android Studio provides, so I asked Claude.ai (Opus 4.1) to create this app. Took about 3 days of prompting and manually entering the patches, but it was a fun learning experience, and I find this app useful.
 
@@ -239,5 +239,5 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 
 
 
-**Note**: This tool requires USB Debugging to be enabled on your Android device. It provides direct filesystem access, so use with caution when modifying system files.
+**Note**: This tool requires USB Debugging to be enabled on your Android emulator or device. It provides direct filesystem access, so use with caution when modifying system files.
 
