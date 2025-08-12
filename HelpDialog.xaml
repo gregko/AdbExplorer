@@ -1,0 +1,148 @@
+﻿<Window x:Class="AdbExplorer.HelpDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ADB Explorer - Help" 
+        Height="500" Width="600"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <Border Grid.Row="0" Background="#F0F0F0" Padding="10">
+            <TextBlock Text="Keyboard Shortcuts and Help" 
+                       FontSize="16" FontWeight="Bold"/>
+        </Border>
+
+        <!-- Content -->
+        <ScrollViewer Grid.Row="1" Margin="10">
+            <StackPanel>
+                <!-- Navigation Shortcuts -->
+                <TextBlock Text="Navigation" FontWeight="Bold" FontSize="14" Margin="0,5"/>
+                <Grid Margin="10,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Enter" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Open file or enter directory" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Backspace" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Navigate to parent directory" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Alt + Left" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="Go back in navigation history" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Alt + Right" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="Go forward in navigation history" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Alt + Up" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="Go to parent folder" Margin="0,2"/>
+                </Grid>
+
+                <Separator Margin="0,10"/>
+
+                <!-- File Operations -->
+                <TextBlock Text="File Operations" FontWeight="Bold" FontSize="14" Margin="0,5"/>
+                <Grid Margin="10,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Delete" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Delete selected files/folders" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="F2" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Rename selected item" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Ctrl + C" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="Copy selected items" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Ctrl + V" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="Paste copied items" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Ctrl + A" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="Select all items" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Ctrl + N" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="5" Grid.Column="1" Text="Create new folder" Margin="0,2"/>
+                </Grid>
+
+                <Separator Margin="0,10"/>
+
+                <!-- View Operations -->
+                <TextBlock Text="View Operations" FontWeight="Bold" FontSize="14" Margin="0,5"/>
+                <Grid Margin="10,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="F5" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Refresh current folder" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Ctrl + L" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Sync tree view with current location" Margin="0,2"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="F1" FontFamily="Consolas" Margin="0,2"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="Show this help dialog" Margin="0,2"/>
+                </Grid>
+
+                <Separator Margin="0,10"/>
+
+                <!-- Tips -->
+                <TextBlock Text="Tips" FontWeight="Bold" FontSize="14" Margin="0,5"/>
+                <TextBlock TextWrapping="Wrap" Margin="10,5">
+                    • Drag and drop files between ADB Explorer windows or to/from Windows Explorer
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap" Margin="10,5">
+                    • Double-click files to open them in Windows (auto-syncs changes back to device)
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap" Margin="10,5">
+                    • The application remembers your last folder and window position
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap" Margin="10,5">
+                    • Use the path bar to quickly navigate by typing a path and pressing Enter
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap" Margin="10,5">
+                    • Right-click for context menu with additional options
+                </TextBlock>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Close Button -->
+        <Border Grid.Row="2" Background="#F0F0F0" Padding="10">
+            <Button Content="Close" Width="100" Height="28" 
+                    HorizontalAlignment="Center"
+                    IsDefault="True"
+                    Click="CloseButton_Click"/>
+        </Border>
+    </Grid>
+</Window>

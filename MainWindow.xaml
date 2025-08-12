@@ -1,0 +1,229 @@
+<Window x:Class="AdbExplorer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:AdbExplorer.Converters"
+        mc:Ignorable="d"
+        Title="ADB Explorer" Height="700" Width="1200"
+        AllowDrop="True"
+        Drop="Window_Drop"
+        DragOver="Window_DragOver">
+
+    <Window.Resources>
+        <local:FileSizeConverter x:Key="FileSizeConverter"/>
+        <local:FileIconConverter x:Key="FileIconConverter"/>
+        <local:AccessibilityColorConverter x:Key="AccessibilityColorConverter"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="25"/>
+        </Grid.RowDefinitions>
+
+        <!-- Device Selection Toolbar -->
+        <ToolBar Grid.Row="0" Height="40" Background="#F5F5F5">
+            <Label Content="Device:" VerticalAlignment="Center" FontWeight="SemiBold"/>
+            <ComboBox Name="DeviceComboBox" Width="300" Height="28" 
+                      VerticalAlignment="Center"
+                      SelectionChanged="DeviceComboBox_SelectionChanged"/>
+            <Button Name="RefreshDevicesButton" Content="↻ Refresh Devices" 
+                    Padding="10,5" Margin="5,0"
+                    Click="RefreshDevicesButton_Click"/>
+            <Separator/>
+            <Label Name="ConnectionStatusLabel" Content="No Device Connected" 
+                   Foreground="DarkGray" VerticalAlignment="Center"/>
+            <Separator/>
+            <Button Name="NewWindowButton" Content="📂 New Window" 
+                    Padding="10,5" Margin="5,0"
+                    Click="NewWindowButton_Click" ToolTip="Open current folder in new window"/>
+        </ToolBar>
+
+        <!-- Navigation Toolbar -->
+        <ToolBar Grid.Row="1" Height="35">
+            <Button Name="BackButton" Content="←" Width="30" FontSize="16"
+                    Click="BackButton_Click" IsEnabled="False" ToolTip="Back"/>
+            <Button Name="ForwardButton" Content="→" Width="30" FontSize="16"
+                    Click="ForwardButton_Click" IsEnabled="False" ToolTip="Forward"/>
+            <Button Name="UpButton" Content="↑" Width="30" FontSize="16"
+                    Click="UpButton_Click" ToolTip="Up"/>
+            <Separator/>
+            <Button Name="RefreshButton" Content="↻" Width="30" FontSize="16"
+                    Click="RefreshButton_Click" ToolTip="Refresh"/>
+            <Button Name="HomeButton" Content="⌂" Width="30" FontSize="16"
+                    Click="HomeButton_Click" ToolTip="Root"/>
+            <Button Name="SyncTreeButton" Content="🎯" Width="30" FontSize="16"
+            Click="SyncTreeButton_Click" ToolTip="Sync folder tree with current location"/>
+            <Separator/>
+            <Button Name="NewFolderButton" Content="📁+" Width="40"
+                    Click="NewFolderButton_Click" ToolTip="New Folder"/>
+            <Button Name="DeleteButton" Content="🗑" Width="30"
+                    Click="DeleteButton_Click" ToolTip="Delete"/>
+            <Separator/>
+            <Button Name="HelpButton" Content="❓" Width="30" FontSize="16"
+            Click="HelpButton_Click" ToolTip="Help (F1)"/>
+        </ToolBar>
+
+        <!-- Path Bar -->
+        <Grid Grid.Row="2" Height="30" Background="#FAFAFA">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Label Grid.Column="0" Content="Path:" VerticalAlignment="Center" Margin="5,0"/>
+            <TextBox Grid.Column="1" Name="PathTextBox" 
+                     VerticalAlignment="Center" Margin="5,0"
+                     KeyDown="PathTextBox_KeyDown"/>
+            <Button Grid.Column="2" Content="Go" Width="40" Margin="5,0"
+                    Click="GoButton_Click"/>
+        </Grid>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250" MinWidth="150"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*" MinWidth="300"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Folder Tree -->
+            <Border Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="0,0,1,0">
+                <TreeView Name="FolderTreeView" 
+                          SelectedItemChanged="FolderTreeView_SelectedItemChanged"
+                          PreviewMouseRightButtonDown="TreeView_PreviewMouseRightButtonDown"
+                          TreeViewItem.Expanded="TreeViewItem_Expanded">
+                    <TreeView.ItemTemplate>
+                        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="📁 " Foreground="{Binding IsAccessible, Converter={StaticResource AccessibilityColorConverter}}"/>
+                                <TextBlock Text="{Binding Name}" 
+                                          Foreground="{Binding IsAccessible, Converter={StaticResource AccessibilityColorConverter}}"/>
+                            </StackPanel>
+                        </HierarchicalDataTemplate>
+                    </TreeView.ItemTemplate>
+                    <TreeView.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Open in New Window" Click="TreeOpenInNewWindow_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Delete" Click="TreeDeleteMenuItem_Click"/>
+                            <MenuItem Header="Properties" Click="TreePropertiesMenuItem_Click"/>
+                        </ContextMenu>
+                    </TreeView.ContextMenu>
+                </TreeView>
+            </Border>
+
+            <!-- Splitter -->
+            <GridSplitter Grid.Column="1" Width="3" HorizontalAlignment="Stretch" 
+                          Background="#E0E0E0"/>
+
+            <!-- File List -->
+            <ListView Grid.Column="2" Name="FileListView"
+                                      SelectionMode="Extended"
+                                      MouseDoubleClick="FileListView_MouseDoubleClick"
+                                      PreviewMouseLeftButtonDown="FileListView_PreviewMouseLeftButtonDown"
+                                      PreviewMouseLeftButtonUp="FileListView_PreviewMouseLeftButtonUp"
+                                      PreviewMouseMove="FileListView_PreviewMouseMove"
+                                      Drop="FileListView_Drop"
+                                      DragOver="FileListView_DragOver"
+                                      AllowDrop="True">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="Name" Width="300">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding ., Converter={StaticResource FileIconConverter}}" 
+                                                  Margin="0,0,5,0"/>
+                                        <TextBlock Text="{Binding Name}" 
+                                                  Foreground="{Binding IsAccessible, Converter={StaticResource AccessibilityColorConverter}}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Size" Width="100">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Size, Converter={StaticResource FileSizeConverter}}"
+                                              Foreground="{Binding IsAccessible, Converter={StaticResource AccessibilityColorConverter}}"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Modified" Width="150">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Modified}" 
+                                              Foreground="{Binding IsAccessible, Converter={StaticResource AccessibilityColorConverter}}"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Permissions" Width="100">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Permissions}" 
+                                              FontFamily="Consolas"
+                                              Foreground="{Binding IsAccessible, Converter={StaticResource AccessibilityColorConverter}}"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                    </GridView>
+                </ListView.View>
+
+                <ListView.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Open" Click="OpenMenuItem_Click" FontWeight="Bold"/>
+                        <MenuItem Header="Open in New Window" Click="OpenInNewWindowMenuItem_Click"/>
+                        <Separator/>
+                        <MenuItem Header="Copy" Click="CopyMenuItem_Click"/>
+                        <MenuItem Header="Paste" Click="PasteMenuItem_Click"/>
+                        <MenuItem Header="Delete" Click="DeleteMenuItem_Click"/>
+                        <Separator/>
+                        <MenuItem Header="New Folder" Click="NewFolderMenuItem_Click"/>
+                        <Separator/>
+                        <MenuItem Header="Properties" Click="PropertiesMenuItem_Click"/>
+                    </ContextMenu>
+                </ListView.ContextMenu>
+            </ListView>
+
+            <!-- Error overlay panel -->
+            <Border Name="ErrorInfoPanel" Background="White" 
+            BorderBrush="Red" BorderThickness="1" 
+            Visibility="Collapsed" Margin="20">
+                <StackPanel Margin="20">
+                    <TextBlock Text="⚠ Access Denied" FontSize="16" FontWeight="Bold" 
+                       Foreground="Red" Margin="0,0,0,10"/>
+                    <TextBlock Name="ErrorPathText" TextWrapping="Wrap"/>
+                    <TextBlock Name="ErrorMessageText" TextWrapping="Wrap" 
+                       Foreground="Gray" Margin="0,10"/>
+                    <TextBlock Text="This directory requires root access or special permissions." 
+                       TextWrapping="Wrap" Margin="0,10"/>
+                    <Button Content="Go Back" Width="100" HorizontalAlignment="Left"
+                    Click="GoBackFromError_Click"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Status Bar -->
+        <StatusBar Grid.Row="4">
+            <StatusBarItem>
+                <TextBlock Name="StatusText" Text="Ready"/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock Name="ItemCountText" Text="0 items"/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock Name="SelectionText" Text="0 selected"/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock Name="WindowCountText" Text="1 window"/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>
