@@ -1,4 +1,7 @@
 /obj
 /bin
 /AdbExplorer.csproj.user
+/installer_output
 AdbExplorer_Setup.exe
+/nul
+/CLAUDE.md

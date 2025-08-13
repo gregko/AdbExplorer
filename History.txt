@@ -1,7 +1,20 @@
 ADB Explorer - Version History
 ==============================
 
-Version 1.1.0 - 2025-08-13
+Version 1.2.0 - 2025-08-13
+---------------------------
+- Added GitHub repository link to About dialog
+- Fixed About dialog layout - GitHub link no longer cut off
+- Improved notification system:
+  * Replaced intrusive MessageBox dialogs with status line notifications
+  * Added color-coded notifications: blue for success, red for errors
+  * Notifications auto-dismiss after 3 seconds
+  * Applied to favorites operations (add, remove, rename, already exists)
+- Simplified favorites removal - no longer requires confirmation dialog
+- Updated installer to display version number on welcome screen
+- Created CLAUDE.md file with project build information
+
+Version 1.1.0 - 2025-08-12 (using Claude Code from now on)
 ---------------------------
 - Added About dialog with application name and version information
 - Added Favorites/Bookmarks feature:
@@ -20,7 +33,7 @@ Version 1.1.0 - 2025-08-13
 - Fixed InputDialog button layout issues
 - Improved user interface polish and usability
 
-Version 1.0.0 - 2025-08-13
+Version 1.0.0 - 2025-08-12
 ---------------------------
 - Initial release
 - Basic ADB file explorer functionality

@@ -337,6 +337,31 @@ namespace AdbExplorer
                 this.Top = virtualScreenTop + virtualScreenHeight - this.Height;
         }
 
+        private DispatcherTimer? notificationTimer;
+        private Brush? originalStatusTextBrush;
+
+        private void ShowStatusNotification(string message, bool isError = false)
+        {
+            if (originalStatusTextBrush == null)
+            {
+                originalStatusTextBrush = StatusText.Foreground;
+            }
+
+            StatusText.Text = message;
+            StatusText.Foreground = isError ? Brushes.Red : Brushes.Blue;
+            
+            notificationTimer?.Stop();
+            notificationTimer = new DispatcherTimer();
+            notificationTimer.Interval = TimeSpan.FromSeconds(3);
+            notificationTimer.Tick += (s, e) =>
+            {
+                notificationTimer.Stop();
+                StatusText.Foreground = originalStatusTextBrush;
+                StatusText.Text = "Ready";
+            };
+            notificationTimer.Start();
+        }
+
         private async void LoadDevices(string? initialDevice = null, string? initialPath = null)
         {
             try
@@ -2101,8 +2126,7 @@ namespace AdbExplorer
             // Check if already exists (skip placeholder at index 0)
             if (favoritesCollection != null && favoritesCollection.Skip(1).Any(f => f.Path == currentPath))
             {
-                MessageBox.Show("This folder is already in favorites.", "Already Added", 
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowStatusNotification("This folder is already in favorites", true);
                 return;
             }
 
@@ -2118,18 +2142,14 @@ namespace AdbExplorer
             // Update UI state
             RemoveFavoriteButton.IsEnabled = true;
             
-            MessageBox.Show($"Added '{displayName}' to favorites.", "Favorite Added", 
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowStatusNotification($"Added '{displayName}' to favorites");
         }
 
         private void RemoveFavoriteButton_Click(object sender, RoutedEventArgs e)
         {
             if (FavoritesComboBox.SelectedItem is FavoriteItem favorite && !favorite.IsPlaceholder)
             {
-                var result = MessageBox.Show($"Remove '{favorite.DisplayName}' from favorites?", 
-                    "Remove Favorite", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                
-                if (result == MessageBoxResult.Yes)
+                // Direct removal without confirmation
                 {
                     // Find the matching favorite in settings (may be different object instance)
                     var settingsFavorite = settings.Favorites.FirstOrDefault(f => f.Path == favorite.Path);
@@ -2149,12 +2169,13 @@ namespace AdbExplorer
                     {
                         RemoveFavoriteButton.IsEnabled = false;
                     }
+                    
+                    ShowStatusNotification($"Removed '{favorite.DisplayName}' from favorites");
                 }
             }
             else if (favoritesCollection.Count > 1)
             {
-                MessageBox.Show("Please select a favorite from the dropdown to remove.", "No Selection", 
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowStatusNotification("Please select a favorite from the dropdown to remove", true);
             }
         }
 
@@ -2179,8 +2200,7 @@ namespace AdbExplorer
             // Check if already exists (skip placeholder at index 0)
             if (favoritesCollection != null && favoritesCollection.Skip(1).Any(f => f.Path == path))
             {
-                MessageBox.Show("This folder is already in favorites.", "Already Added",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowStatusNotification("This folder is already in favorites", true);
                 return;
             }
 
@@ -2206,8 +2226,7 @@ namespace AdbExplorer
             // Update UI state
             RemoveFavoriteButton.IsEnabled = true;
             
-            MessageBox.Show($"Added '{displayName}' to favorites.", "Favorite Added",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowStatusNotification($"Added '{displayName}' to favorites");
         }
         
         private bool IsGenericFolderName(string name)
@@ -2286,8 +2305,7 @@ namespace AdbExplorer
                         FavoritesComboBox.Items.Refresh();
                         FavoritesComboBox.SelectedIndex = currentIndex;
                         
-                        MessageBox.Show($"Favorite renamed to '{newName}'.", "Renamed", 
-                            MessageBoxButton.OK, MessageBoxImage.Information);
+                        ShowStatusNotification($"Favorite renamed to '{newName}'");
                     }
                 }
             }

@@ -21,12 +21,12 @@ ShowUninstDetails show
 ; Version Information
 
 !define PRODUCT_NAME "ADB Explorer"
-!define PRODUCT_VERSION "1.0.0"
+!define PRODUCT_VERSION "1.2.0"
 !define PRODUCT_PUBLISHER "AdbExplorer Team"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define PRODUCT_UNINST_ROOT_KEY "HKLM"
 
-VIProductVersion "1.0.0.0"
+VIProductVersion "1.2.0.0"
 VIAddVersionKey "ProductName" "${PRODUCT_NAME}"
 VIAddVersionKey "CompanyName" "${PRODUCT_PUBLISHER}"
 VIAddVersionKey "FileDescription" "ADB Explorer Installer"
@@ -38,6 +38,12 @@ VIAddVersionKey "FileVersion" "${PRODUCT_VERSION}"
 !define MUI_ABORTWARNING
 !define MUI_ICON "Resources\icon.ico"
 !define MUI_UNICON "Resources\icon.ico"
+
+;--------------------------------
+; Welcome Page Customization
+
+!define MUI_WELCOMEPAGE_TITLE "Welcome to ADB Explorer ${PRODUCT_VERSION} Setup"
+!define MUI_WELCOMEPAGE_TEXT "This wizard will guide you through the installation of ADB Explorer version ${PRODUCT_VERSION}.$\r$\n$\r$\nADB Explorer is a Windows file manager for Android devices that provides a familiar Explorer-like interface for browsing and managing files via ADB.$\r$\n$\r$\nClick Next to continue."
 
 ;--------------------------------
 ; Pages
