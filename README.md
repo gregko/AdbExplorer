@@ -21,6 +21,8 @@ In developing and testing my Android app, I needed to access files and folders i
 
 - **Real-time Sync** - Auto-sync edited files back to device when opened in Windows
 
+- **Non-intrusive Notifications** - Status bar notifications with color coding (blue for success, red for errors)
+
 
 
 ### 📁 File Management
@@ -34,6 +36,10 @@ In developing and testing my Android app, I needed to access files and folders i
 - File properties viewer with permissions info
 
 - Context menu integration - "Open in ADB Explorer" for folders
+
+- **Favorites/Bookmarks** - Save frequently accessed folders for quick navigation
+
+- **Rename Support** - Press F2 or use context menu to rename files and folders
 
 
 
@@ -83,7 +89,7 @@ In developing and testing my Android app, I needed to access files and folders i
 
 
 
-1. Download the latest installer from [Releases](https://github.com/yourusername/adbexplorer/releases)
+1. Download the latest installer from [Releases](https://github.com/gregko/AdbExplorer/releases)
 
 2. Run `AdbExplorer_Setup.exe`
 
@@ -153,7 +159,7 @@ In developing and testing my Android app, I needed to access files and folders i
 
 # Clone the repository
 
-git clone https://github.com/yourusername/adbexplorer.git
+git clone https://github.com/gregko/AdbExplorer.git
 
 cd adbexplorer
 
