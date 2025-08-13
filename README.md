@@ -3,7 +3,7 @@
 
 A modern Windows file manager for Android devices that provides a familiar Explorer-like interface for browsing and managing files on your Android emulator or device via ADB (Android Debug Bridge).
 
-In developing and testing my Android app, I needed to access files and folders in the emulators. Got tired with the clunky file explorer that Android Studio provides, so I asked Claude.ai (Opus 4.1) to create this app. Took about 3 days of prompting and manually entering the patches, but it was a fun learning experience, and I find this app useful.
+In developing and testing my Android app, I needed to access files and folders in the emulators. Got tired with the clunky file explorer that Android Studio provides, so I asked Claude.ai (Opus 4.1) to create this app. Took about 3 days of prompting and manually entering the patches, but it was a fun learning experience, and I find this app useful. Starting from ver. 1.1 of this app I switched to using Claude Code, which is simply ingenious.
 
 ## Features
 
