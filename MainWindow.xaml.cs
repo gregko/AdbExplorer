@@ -41,6 +41,7 @@ namespace AdbExplorer
         private static List<MainWindow> allWindows = new List<MainWindow>();
         private static int windowCounter = 0;
         private int windowId;
+        private ObservableCollection<FavoriteItem> favoritesCollection;
 
         // Keep the parameterless constructor for XAML
         public MainWindow() : this(null, null)
@@ -302,6 +303,9 @@ namespace AdbExplorer
             DeviceComboBox.ItemsSource = devices;
             FileListView.ItemsSource = currentFiles;
             FolderTreeView.ItemsSource = rootFolders;
+            
+            // Initialize favorites
+            LoadFavorites();
 
             // Restore window size and position
             if (settings.WindowWidth > 0 && settings.WindowHeight > 0)
@@ -649,6 +653,9 @@ namespace AdbExplorer
                 BackButton.IsEnabled = navigationHistory.Count > 0;
                 ForwardButton.IsEnabled = navigationForward.Count > 0;
                 UpButton.IsEnabled = path != "/";
+                
+                // Auto-select matching favorite if exists
+                UpdateSelectedFavorite(path);
             }
             catch (Exception ex)
             {
@@ -1305,7 +1312,7 @@ namespace AdbExplorer
             e.Handled = true;
         }
 
-        private async void Window_Drop(object sender, DragEventArgs e)
+        private void Window_Drop(object sender, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
@@ -2018,6 +2025,324 @@ namespace AdbExplorer
         private void HelpButton_Click(object sender, RoutedEventArgs e)
         {
             ShowHelpDialog();
+        }
+
+        private void AboutButton_Click(object sender, RoutedEventArgs e)
+        {
+            var aboutDialog = new AboutDialog();
+            aboutDialog.Owner = this;
+            aboutDialog.ShowDialog();
+        }
+
+        private void LoadFavorites()
+        {
+            // Create an ObservableCollection from settings favorites
+            favoritesCollection = new ObservableCollection<FavoriteItem>();
+            
+            // Always add placeholder as first item
+            favoritesCollection.Add(FavoriteItem.CreatePlaceholder());
+            
+            // Add actual favorites
+            if (settings.Favorites != null)
+            {
+                foreach (var favorite in settings.Favorites)
+                {
+                    favoritesCollection.Add(favorite);
+                }
+            }
+            
+            FavoritesComboBox.ItemsSource = favoritesCollection;
+            FavoritesComboBox.SelectedIndex = 0; // Select placeholder by default
+            
+            // Enable/disable based on actual favorites (not counting placeholder)
+            bool hasFavorites = favoritesCollection.Count > 1;
+            RemoveFavoriteButton.IsEnabled = hasFavorites;
+        }
+        
+        private void UpdateSelectedFavorite(string path)
+        {
+            if (favoritesCollection == null) return;
+            
+            // Find matching favorite
+            var matchingFavorite = favoritesCollection.FirstOrDefault(f => !f.IsPlaceholder && f.Path == path);
+            
+            if (matchingFavorite != null)
+            {
+                // Select the matching favorite
+                FavoritesComboBox.SelectedItem = matchingFavorite;
+            }
+            else
+            {
+                // Reset to placeholder if no match
+                FavoritesComboBox.SelectedIndex = 0;
+            }
+        }
+
+        private async void FavoritesComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (FavoritesComboBox.SelectedItem is FavoriteItem favorite && !favorite.IsPlaceholder)
+            {
+                navigationHistory.Push(currentPath);
+                navigationForward.Clear();
+                await NavigateToPath(favorite.Path);
+                // Keep the selected favorite visible instead of resetting
+                // This allows the user to see which favorite they're in and remove it if needed
+                
+                // Auto-sync the folder tree to show the location
+                await SyncTreeWithCurrentPath();
+            }
+        }
+
+        private void AddFavoriteButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(currentPath))
+                return;
+
+            // Check if already exists (skip placeholder at index 0)
+            if (favoritesCollection != null && favoritesCollection.Skip(1).Any(f => f.Path == currentPath))
+            {
+                MessageBox.Show("This folder is already in favorites.", "Already Added", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // Get display name with more context for common folder names
+            string displayName = GetSmartDisplayName(currentPath);
+
+            // Add to favorites
+            var favorite = new FavoriteItem(currentPath, displayName);
+            settings.Favorites.Add(favorite);
+            favoritesCollection.Add(favorite);
+            settings.Save();
+
+            // Update UI state
+            RemoveFavoriteButton.IsEnabled = true;
+            
+            MessageBox.Show($"Added '{displayName}' to favorites.", "Favorite Added", 
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void RemoveFavoriteButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (FavoritesComboBox.SelectedItem is FavoriteItem favorite && !favorite.IsPlaceholder)
+            {
+                var result = MessageBox.Show($"Remove '{favorite.DisplayName}' from favorites?", 
+                    "Remove Favorite", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                
+                if (result == MessageBoxResult.Yes)
+                {
+                    // Find the matching favorite in settings (may be different object instance)
+                    var settingsFavorite = settings.Favorites.FirstOrDefault(f => f.Path == favorite.Path);
+                    if (settingsFavorite != null)
+                    {
+                        settings.Favorites.Remove(settingsFavorite);
+                    }
+                    
+                    favoritesCollection.Remove(favorite);
+                    settings.Save();
+                    
+                    // Reset to placeholder
+                    FavoritesComboBox.SelectedIndex = 0;
+                    
+                    // Update UI state if no favorites left (only placeholder remains)
+                    if (favoritesCollection.Count == 1)
+                    {
+                        RemoveFavoriteButton.IsEnabled = false;
+                    }
+                }
+            }
+            else if (favoritesCollection.Count > 1)
+            {
+                MessageBox.Show("Please select a favorite from the dropdown to remove.", "No Selection", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        private void TreeAddToFavoritesMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (FolderTreeView.SelectedItem is FolderNode folder)
+            {
+                AddPathToFavorites(folder.FullPath, folder.Name);
+            }
+        }
+
+        private void AddToFavoritesMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (FileListView.SelectedItem is FileItem item && item.IsDirectory)
+            {
+                AddPathToFavorites(item.FullPath, item.Name);
+            }
+        }
+
+        private void AddPathToFavorites(string path, string name)
+        {
+            // Check if already exists (skip placeholder at index 0)
+            if (favoritesCollection != null && favoritesCollection.Skip(1).Any(f => f.Path == path))
+            {
+                MessageBox.Show("This folder is already in favorites.", "Already Added",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // Get a smarter display name if the provided one is too generic
+            string displayName = name;
+            if (IsGenericFolderName(name))
+            {
+                displayName = GetSmartDisplayName(path);
+            }
+
+            // Add to favorites
+            var favorite = new FavoriteItem(path, displayName);
+            settings.Favorites.Add(favorite);
+            
+            // Add to ObservableCollection for immediate UI update
+            if (favoritesCollection != null)
+            {
+                favoritesCollection.Add(favorite);
+            }
+            
+            settings.Save();
+
+            // Update UI state
+            RemoveFavoriteButton.IsEnabled = true;
+            
+            MessageBox.Show($"Added '{displayName}' to favorites.", "Favorite Added",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        
+        private bool IsGenericFolderName(string name)
+        {
+            var genericNames = new[] { "files", "data", "cache", "obb", "temp", "tmp", "download", "downloads", "documents", "pictures", "music", "videos" };
+            return genericNames.Contains(name.ToLower());
+        }
+        
+        private string GetSmartDisplayName(string path)
+        {
+            if (path == "/") return "Root (/)";
+            
+            string[] parts = path.TrimEnd('/').Split('/');
+            string lastPart = parts[parts.Length - 1];
+            
+            // For generic folder names, include parent folder(s) for context
+            if (IsGenericFolderName(lastPart) && parts.Length > 1)
+            {
+                // For paths like /sdcard/Android/data/com.hyperionics.avar/files
+                // Try to find the most relevant parent (usually app package name)
+                if (path.Contains("/Android/data/") || path.Contains("/Android/obb/"))
+                {
+                    // Extract app package name
+                    for (int i = parts.Length - 2; i >= 0; i--)
+                    {
+                        if (parts[i].Contains(".") && parts[i].Length > 5) // Likely a package name
+                        {
+                            return $"{parts[i]}/{lastPart}";
+                        }
+                    }
+                }
+                
+                // For other cases, include immediate parent
+                return $"{parts[parts.Length - 2]}/{lastPart}";
+            }
+            
+            return lastPart;
+        }
+
+        private void FavoritesComboBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // Right-click support for context menu
+            if (FavoritesComboBox.SelectedItem is FavoriteItem favorite && !favorite.IsPlaceholder)
+            {
+                // Context menu will show automatically
+            }
+        }
+        
+        private void EditFavoriteName_Click(object sender, RoutedEventArgs e)
+        {
+            if (FavoritesComboBox.SelectedItem is FavoriteItem favorite && !favorite.IsPlaceholder)
+            {
+                var inputDialog = new InputDialog("Edit Favorite Name", 
+                    "Enter a new name for this favorite:", 
+                    favorite.DisplayName);
+                inputDialog.Owner = this;
+                
+                if (inputDialog.ShowDialog() == true)
+                {
+                    string newName = inputDialog.ResponseText.Trim();
+                    if (!string.IsNullOrEmpty(newName))
+                    {
+                        // Update the display name
+                        favorite.DisplayName = newName;
+                        
+                        // Find and update in settings
+                        var settingsFavorite = settings.Favorites.FirstOrDefault(f => f.Path == favorite.Path);
+                        if (settingsFavorite != null)
+                        {
+                            settingsFavorite.DisplayName = newName;
+                            settings.Save();
+                        }
+                        
+                        // Refresh the ComboBox display
+                        int currentIndex = FavoritesComboBox.SelectedIndex;
+                        FavoritesComboBox.Items.Refresh();
+                        FavoritesComboBox.SelectedIndex = currentIndex;
+                        
+                        MessageBox.Show($"Favorite renamed to '{newName}'.", "Renamed", 
+                            MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+            }
+        }
+        
+        private void RemoveFavoriteContext_Click(object sender, RoutedEventArgs e)
+        {
+            RemoveFavoriteButton_Click(sender, e);
+        }
+
+        private async void RenameMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            await RenameSelectedItem();
+        }
+        
+        private async void TreeRenameMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (FolderTreeView.SelectedItem is FolderNode folder && folder.FullPath != "/")
+            {
+                var dialog = new InputDialog("Rename Folder", $"Enter new name for '{folder.Name}':", folder.Name);
+                dialog.Owner = this;
+                
+                if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.ResponseText))
+                {
+                    try
+                    {
+                        string newName = dialog.ResponseText;
+                        string parentPath = Path.GetDirectoryName(folder.FullPath.Replace('\\', '/'))?.Replace('\\', '/') ?? "/";
+                        string newPath = parentPath == "/" ? "/" + newName : parentPath + "/" + newName;
+                        
+                        // Use proper escaping for mv command
+                        var oldEscaped = EscapeForShell(folder.FullPath);
+                        var newEscaped = EscapeForShell(newPath);
+                        
+                        await Task.Run(() =>
+                            adbService.ExecuteShellCommand($"mv {oldEscaped} {newEscaped}"));
+                        
+                        // Refresh the parent node in the tree
+                        await RefreshParentTreeNode(parentPath);
+                        
+                        // If we were in the renamed folder, navigate to parent
+                        if (currentPath.StartsWith(folder.FullPath))
+                        {
+                            await NavigateToPath(parentPath);
+                        }
+                        
+                        StatusText.Text = $"Renamed folder to {newName}";
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error renaming folder: {ex.Message}", "Error",
+                            MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
         }
 
         private void ShowHelpDialog()

@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using AdbExplorer.Models;
 
 namespace AdbExplorer
 {
@@ -17,6 +19,7 @@ namespace AdbExplorer
         public int WindowHeight { get; set; } = 700;
         public double WindowLeft { get; set; } = 100;
         public double WindowTop { get; set; } = 100;
+        public List<FavoriteItem> Favorites { get; set; } = new List<FavoriteItem>();
 
         public static Settings Load()
         {

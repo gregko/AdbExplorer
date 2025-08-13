@@ -1,0 +1,35 @@
+ADB Explorer - Version History
+==============================
+
+Version 1.1.0 - 2025-08-13
+---------------------------
+- Added About dialog with application name and version information
+- Added Favorites/Bookmarks feature:
+  * ComboBox dropdown for quick navigation to bookmarked directories
+  * Add current folder to favorites with ⭐+ button
+  * Remove selected favorite with ⭐- button
+  * Right-click context menu to add folders to favorites
+  * Edit favorite names via right-click context menu
+  * Smart naming for generic folder names (shows parent context)
+  * Persistent storage of favorites between sessions
+  * Auto-sync folder tree when navigating to favorites
+- Added Rename functionality:
+  * F2 keyboard shortcut to rename files/folders
+  * Context menu option for renaming in file list
+  * Context menu option for renaming in folder tree
+- Fixed InputDialog button layout issues
+- Improved user interface polish and usability
+
+Version 1.0.0 - 2025-08-13
+---------------------------
+- Initial release
+- Basic ADB file explorer functionality
+- Browse Android device filesystem
+- Navigate folders with tree view and list view
+- Copy files between device and Windows
+- Delete files and folders
+- Create new folders
+- Drag and drop support
+- File properties viewer
+- Multi-window support
+- Search and navigation history

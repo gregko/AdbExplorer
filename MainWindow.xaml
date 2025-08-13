@@ -59,6 +59,40 @@
             <Button Name="SyncTreeButton" Content="🎯" Width="30" FontSize="16"
             Click="SyncTreeButton_Click" ToolTip="Sync folder tree with current location"/>
             <Separator/>
+            <ComboBox Name="FavoritesComboBox" Width="200" Height="26"
+                      VerticalAlignment="Center"
+                      SelectionChanged="FavoritesComboBox_SelectionChanged"
+                      PreviewMouseRightButtonDown="FavoritesComboBox_PreviewMouseRightButtonDown">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock ToolTip="{Binding Path}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="{Binding DisplayName}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsPlaceholder}" Value="True">
+                                            <Setter Property="Text" Value="Favorites:"/>
+                                            <Setter Property="FontStyle" Value="Italic"/>
+                                            <Setter Property="Foreground" Value="Gray"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+                <ComboBox.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Edit Name" Click="EditFavoriteName_Click"/>
+                        <MenuItem Header="Remove" Click="RemoveFavoriteContext_Click"/>
+                    </ContextMenu>
+                </ComboBox.ContextMenu>
+            </ComboBox>
+            <Button Name="AddFavoriteButton" Content="⭐+" Width="35"
+                    Click="AddFavoriteButton_Click" ToolTip="Add current folder to favorites"/>
+            <Button Name="RemoveFavoriteButton" Content="⭐-" Width="35"
+                    Click="RemoveFavoriteButton_Click" ToolTip="Remove selected favorite"/>
+            <Separator/>
             <Button Name="NewFolderButton" Content="📁+" Width="40"
                     Click="NewFolderButton_Click" ToolTip="New Folder"/>
             <Button Name="DeleteButton" Content="🗑" Width="30"
@@ -66,6 +100,9 @@
             <Separator/>
             <Button Name="HelpButton" Content="❓" Width="30" FontSize="16"
             Click="HelpButton_Click" ToolTip="Help (F1)"/>
+            <Separator/>
+            <Button Name="AboutButton" Content="ℹ" Width="30" FontSize="16"
+            Click="AboutButton_Click" ToolTip="About"/>
         </ToolBar>
 
         <!-- Path Bar -->
@@ -109,7 +146,9 @@
                     <TreeView.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="Open in New Window" Click="TreeOpenInNewWindow_Click"/>
+                            <MenuItem Header="Add to Favorites" Click="TreeAddToFavoritesMenuItem_Click"/>
                             <Separator/>
+                            <MenuItem Header="Rename" Click="TreeRenameMenuItem_Click"/>
                             <MenuItem Header="Delete" Click="TreeDeleteMenuItem_Click"/>
                             <MenuItem Header="Properties" Click="TreePropertiesMenuItem_Click"/>
                         </ContextMenu>
@@ -177,9 +216,11 @@
                     <ContextMenu>
                         <MenuItem Header="Open" Click="OpenMenuItem_Click" FontWeight="Bold"/>
                         <MenuItem Header="Open in New Window" Click="OpenInNewWindowMenuItem_Click"/>
+                        <MenuItem Header="Add to Favorites" Click="AddToFavoritesMenuItem_Click"/>
                         <Separator/>
                         <MenuItem Header="Copy" Click="CopyMenuItem_Click"/>
                         <MenuItem Header="Paste" Click="PasteMenuItem_Click"/>
+                        <MenuItem Header="Rename" Click="RenameMenuItem_Click"/>
                         <MenuItem Header="Delete" Click="DeleteMenuItem_Click"/>
                         <Separator/>
                         <MenuItem Header="New Folder" Click="NewFolderMenuItem_Click"/>
