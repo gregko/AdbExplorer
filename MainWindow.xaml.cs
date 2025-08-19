@@ -1576,7 +1576,7 @@ namespace AdbExplorer
                 "Confirm Delete",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
-                MessageBoxResult.No);
+                MessageBoxResult.Yes);
 
             if (result == MessageBoxResult.Yes)
             {
@@ -1675,7 +1675,7 @@ namespace AdbExplorer
                 "Confirm Delete Folder",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
-                MessageBoxResult.No);
+                MessageBoxResult.Yes);
 
             if (result == MessageBoxResult.Yes)
             {

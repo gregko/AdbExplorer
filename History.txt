@@ -1,6 +1,10 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.2.1 - 2025-08-19
+---------------------------
+- Changed delete confirmation dialogs to default to "Yes" instead of "No"
+
 Version 1.2.0 - 2025-08-13
 ---------------------------
 - Added GitHub repository link to About dialog
