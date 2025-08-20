@@ -362,6 +362,16 @@ namespace AdbExplorer.Services
             // Use single quotes for paths with special characters in rm, cp, mv commands
             var escapedPath = EscapePathForShell(path);
             adbService.ExecuteShellCommand($"mkdir -p {escapedPath}");
+            
+            // Set directory permissions to 770 (drwxrwx---)
+            try
+            {
+                adbService.ExecuteShellCommand($"chmod 770 {escapedPath}");
+            }
+            catch
+            {
+                // Ignore permission errors, some paths may not allow chmod
+            }
         }
 
         public void DeleteItem(string path)

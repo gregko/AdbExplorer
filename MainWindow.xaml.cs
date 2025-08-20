@@ -1228,10 +1228,23 @@ namespace AdbExplorer
                             if (file.IsDirectory)
                             {
                                 adbService.ExecuteShellCommand($"cp -r {sourceEscaped} {destEscaped}");
+                                // Set permissions recursively for directories (770 for dirs, 660 for files)
+                                try
+                                {
+                                    adbService.ExecuteShellCommand($"chmod -R 770 {destEscaped}");
+                                    adbService.ExecuteShellCommand($"find {destEscaped} -type f -exec chmod 660 {{}} \\;");
+                                }
+                                catch { /* Ignore permission errors */ }
                             }
                             else
                             {
                                 adbService.ExecuteShellCommand($"cp {sourceEscaped} {destEscaped}");
+                                // Set permissions to 660 for copied file
+                                try
+                                {
+                                    adbService.ExecuteShellCommand($"chmod 660 {destEscaped}");
+                                }
+                                catch { /* Ignore permission errors */ }
                             }
                         });
                     }
@@ -1307,10 +1320,10 @@ namespace AdbExplorer
             string dirName = Path.GetFileName(localPath);
             string remoteDir = remotePath + "/" + dirName;
 
-            // Create directory on device
+            // Create directory on device (CreateFolder now sets permissions to 770)
             await Task.Run(() => fileSystemService.CreateFolder(remoteDir));
 
-            // Upload all files in the directory
+            // Upload all files in the directory (PushFile now sets permissions to 660)
             foreach (string file in Directory.GetFiles(localPath))
             {
                 string destPath = remoteDir + "/" + Path.GetFileName(file);
@@ -1790,10 +1803,23 @@ namespace AdbExplorer
                                 if (item.IsDirectory)
                                 {
                                     adbService.ExecuteShellCommand($"cp -r \"{item.FullPath}\" \"{destPath}\"");
+                                    // Set permissions recursively for directories
+                                    try
+                                    {
+                                        adbService.ExecuteShellCommand($"chmod -R 770 \"{destPath}\"");
+                                        adbService.ExecuteShellCommand($"find \"{destPath}\" -type f -exec chmod 660 {{}} \\;");
+                                    }
+                                    catch { /* Ignore permission errors */ }
                                 }
                                 else
                                 {
                                     adbService.ExecuteShellCommand($"cp \"{item.FullPath}\" \"{destPath}\"");
+                                    // Set permissions to 660 for copied file
+                                    try
+                                    {
+                                        adbService.ExecuteShellCommand($"chmod 660 \"{destPath}\"");
+                                    }
+                                    catch { /* Ignore permission errors */ }
                                 }
                             });
                         }
@@ -2404,10 +2430,23 @@ namespace AdbExplorer
                                 if (item.IsDirectory)
                                 {
                                     adbService.ExecuteShellCommand($"cp -r {sourceEscaped} {destEscaped}");
+                                    // Set permissions recursively for directories
+                                    try
+                                    {
+                                        adbService.ExecuteShellCommand($"chmod -R 770 {destEscaped}");
+                                        adbService.ExecuteShellCommand($"find {destEscaped} -type f -exec chmod 660 {{}} \\;");
+                                    }
+                                    catch { /* Ignore permission errors */ }
                                 }
                                 else
                                 {
                                     adbService.ExecuteShellCommand($"cp {sourceEscaped} {destEscaped}");
+                                    // Set permissions to 660 for copied file
+                                    try
+                                    {
+                                        adbService.ExecuteShellCommand($"chmod 660 {destEscaped}");
+                                    }
+                                    catch { /* Ignore permission errors */ }
                                 }
                             });
                         }

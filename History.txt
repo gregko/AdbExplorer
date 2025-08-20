@@ -1,6 +1,14 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.2.2 - 2025-08-20
+---------------------------
+- Fixed file permissions for transferred files:
+  * Files created via drag & drop now get permissions -rw-rw---- (660)
+  * Directories created get permissions drwxrwx--- (770)
+  * Applied to all file operations: drag from Windows, internal copy/paste, and directory uploads
+  * Matches permissions used by Android apps like @Voice
+
 Version 1.2.1 - 2025-08-19
 ---------------------------
 - Changed delete confirmation dialogs to default to "Yes" instead of "No"

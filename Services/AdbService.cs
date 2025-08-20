@@ -223,6 +223,16 @@ namespace AdbExplorer.Services
             {
                 throw new Exception($"ADB push failed: {error}");
             }
+
+            // Set permissions to 660 (-rw-rw----) after pushing the file
+            try
+            {
+                ExecuteShellCommand($"chmod 660 \"{remotePath}\"");
+            }
+            catch
+            {
+                // Ignore permission errors, some paths may not allow chmod
+            }
         }
     }
 }
