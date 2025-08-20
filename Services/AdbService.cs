@@ -194,6 +194,11 @@ namespace AdbExplorer.Services
 
         public void PushFile(string localPath, string remotePath)
         {
+            PushFile(localPath, remotePath, true);
+        }
+
+        public void PushFile(string localPath, string remotePath, bool setPermissions)
+        {
             if (string.IsNullOrEmpty(currentDeviceId))
                 throw new InvalidOperationException("No device selected");
 
@@ -219,19 +224,42 @@ namespace AdbExplorer.Services
             string error = process.StandardError.ReadToEnd();
             process.WaitForExit();
 
-            if (process.ExitCode != 0 && !string.IsNullOrEmpty(error) && !error.Contains("Warning"))
+            // Check if push actually failed or if it's just a non-critical error
+            // "fchown failed" and "remote fchown failed" are non-critical - the file was still pushed
+            bool isRealError = process.ExitCode != 0 && 
+                              !string.IsNullOrEmpty(error) && 
+                              !error.Contains("Warning") &&
+                              !error.Contains("1 file pushed") && // If it says file pushed, it succeeded
+                              !error.Contains("fchown failed"); // fchown errors are non-critical
+            
+            if (isRealError)
             {
                 throw new Exception($"ADB push failed: {error}");
             }
 
             // Set permissions to 660 (-rw-rw----) after pushing the file
+            if (setPermissions)
+            {
+                try
+                {
+                    ExecuteShellCommand($"chmod 660 \"{remotePath}\"");
+                }
+                catch
+                {
+                    // Ignore permission errors, some paths may not allow chmod
+                }
+            }
+        }
+
+        public void SetFilePermissions(string remotePath, string permissions = "660")
+        {
             try
             {
-                ExecuteShellCommand($"chmod 660 \"{remotePath}\"");
+                ExecuteShellCommand($"chmod {permissions} \"{remotePath}\"");
             }
             catch
             {
-                // Ignore permission errors, some paths may not allow chmod
+                // Ignore permission errors
             }
         }
     }

@@ -8,6 +8,11 @@ Version 1.2.2 - 2025-08-20
   * Directories created get permissions drwxrwx--- (770)
   * Applied to all file operations: drag from Windows, internal copy/paste, and directory uploads
   * Matches permissions used by Android apps like @Voice
+- Fixed file upload reliability issues:
+  * Resolved timing conflicts when uploading multiple files
+  * Files now upload completely (previously could be truncated)
+  * Improved error handling to ignore non-critical ADB warnings (e.g., fchown failed)
+  * Batched permission setting to avoid interrupting file transfers
 
 Version 1.2.1 - 2025-08-19
 ---------------------------

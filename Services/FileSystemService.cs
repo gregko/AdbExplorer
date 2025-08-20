@@ -407,7 +407,17 @@ namespace AdbExplorer.Services
 
         public void PushFile(string localPath, string remotePath)
         {
-            adbService.PushFile(localPath, remotePath);
+            adbService.PushFile(localPath, remotePath, true);
+        }
+
+        public void PushFile(string localPath, string remotePath, bool setPermissions)
+        {
+            adbService.PushFile(localPath, remotePath, setPermissions);
+        }
+
+        public void SetFilePermissions(string remotePath, string permissions = "660")
+        {
+            adbService.SetFilePermissions(remotePath, permissions);
         }
     }
 }

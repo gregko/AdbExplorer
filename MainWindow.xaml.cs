@@ -1265,7 +1265,9 @@ namespace AdbExplorer
 
             int uploadedCount = 0;
             var errors = new List<string>();
+            var uploadedFiles = new List<string>();
 
+            // First, upload all files without setting permissions
             foreach (string file in files)
             {
                 try
@@ -1283,7 +1285,8 @@ namespace AdbExplorer
                             ? "/" + Path.GetFileName(file)
                             : targetPath + "/" + Path.GetFileName(file);
 
-                        await Task.Run(() => fileSystemService.PushFile(file, destPath));
+                        await Task.Run(() => fileSystemService.PushFile(file, destPath, false));
+                        uploadedFiles.Add(destPath);
                         uploadedCount++;
                     }
                 }
@@ -1291,6 +1294,18 @@ namespace AdbExplorer
                 {
                     errors.Add($"{Path.GetFileName(file)}: {ex.Message}");
                 }
+            }
+
+            // Now set permissions for all uploaded files in batch
+            if (uploadedFiles.Count > 0)
+            {
+                await Task.Run(() =>
+                {
+                    foreach (var filePath in uploadedFiles)
+                    {
+                        fileSystemService.SetFilePermissions(filePath, "660");
+                    }
+                });
             }
 
             await RefreshCurrentFolder();
@@ -1320,14 +1335,29 @@ namespace AdbExplorer
             string dirName = Path.GetFileName(localPath);
             string remoteDir = remotePath + "/" + dirName;
 
-            // Create directory on device (CreateFolder now sets permissions to 770)
+            // Create directory on device
             await Task.Run(() => fileSystemService.CreateFolder(remoteDir));
 
-            // Upload all files in the directory (PushFile now sets permissions to 660)
+            var uploadedFiles = new List<string>();
+
+            // Upload all files in the directory without setting permissions yet
             foreach (string file in Directory.GetFiles(localPath))
             {
                 string destPath = remoteDir + "/" + Path.GetFileName(file);
-                await Task.Run(() => fileSystemService.PushFile(file, destPath));
+                await Task.Run(() => fileSystemService.PushFile(file, destPath, false));
+                uploadedFiles.Add(destPath);
+            }
+
+            // Set permissions for all files in batch
+            if (uploadedFiles.Count > 0)
+            {
+                await Task.Run(() =>
+                {
+                    foreach (var filePath in uploadedFiles)
+                    {
+                        fileSystemService.SetFilePermissions(filePath, "660");
+                    }
+                });
             }
 
             // Recursively upload subdirectories
