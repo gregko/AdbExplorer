@@ -1147,12 +1147,8 @@ namespace AdbExplorer
                     }
                 }
 
-                // Check for Outlook virtual files first
-                if (e.Data.GetDataPresent("FileGroupDescriptor") || e.Data.GetDataPresent("FileGroupDescriptorW"))
-                {
-                    await HandleOutlookDrop(e.Data, targetPath);
-                }
-                else if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                // Check for regular file drops first (prioritize over virtual files)
+                if (e.Data.GetDataPresent(DataFormats.FileDrop))
                 {
                     string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
 
@@ -1181,6 +1177,11 @@ namespace AdbExplorer
                         // External drop or from another AdbExplorer window
                         await HandleExternalFileDrop(files, targetPath);
                     }
+                }
+                // Check for Outlook virtual files only if no regular FileDrop
+                else if (e.Data.GetDataPresent("FileGroupDescriptor") || e.Data.GetDataPresent("FileGroupDescriptorW"))
+                {
+                    await HandleOutlookDrop(e.Data, targetPath);
                 }
                 else if (e.Data.GetDataPresent("AdbFiles"))
                 {

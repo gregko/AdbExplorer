@@ -1,6 +1,13 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.2.4 - 2025-08-24
+---------------------------
+- Fixed drag & drop error when dragging files from Windows desktop:
+  * Resolved "Invalid lindex" error that occurred with regular file drops
+  * Reordered format checks to prioritize regular files over virtual Outlook files
+  * Files from Windows Explorer now correctly handled without COM errors
+
 Version 1.2.3 - 2025-08-24
 ---------------------------
 - Added support for drag & drop from Microsoft Outlook:

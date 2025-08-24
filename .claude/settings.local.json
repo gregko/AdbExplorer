@@ -7,6 +7,7 @@
       "Bash(\"C:\\Program Files (x86)\\NSIS\\makensis.exe\" Installer.nsi)",
       "Bash(\"C:\\Program Files (x86)\\NSIS\\makensis.exe\" Installer.nsi)",
       "Bash(\"C:\\Program Files (x86)\\NSIS\\makensis.exe\" Installer.nsi)",
+      "Bash(\"C:\\Program Files (x86)\\NSIS\\makensis.exe\" Installer.nsi)",
       "Bash(\"C:\\Program Files (x86)\\NSIS\\makensis.exe\" Installer.nsi)"
     ],
     "deny": [],
