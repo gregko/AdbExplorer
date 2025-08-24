@@ -1,6 +1,15 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.2.3 - 2025-08-24
+---------------------------
+- Added support for drag & drop from Microsoft Outlook:
+  * Files can now be dragged directly from Outlook messages to the app window
+  * Handles Outlook's special virtual file formats (FileGroupDescriptor/FileContents)
+  * Supports both Unicode and ANSI file descriptors
+  * Processes multiple attachments in a single drag operation
+  * No longer requires saving attachments to desktop first
+
 Version 1.2.2 - 2025-08-20
 ---------------------------
 - Fixed file permissions for transferred files:

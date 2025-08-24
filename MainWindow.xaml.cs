@@ -21,6 +21,9 @@ namespace AdbExplorer
 {
     public partial class MainWindow : Window
     {
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GlobalSize(IntPtr hMem);
+
         private AdbService adbService;
         private FileSystemService fileSystemService;
         private ObservableCollection<AndroidDevice> devices;
@@ -1108,7 +1111,10 @@ namespace AdbExplorer
 
         private void FileListView_DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop) || e.Data.GetDataPresent("AdbFiles"))
+            if (e.Data.GetDataPresent(DataFormats.FileDrop) || 
+                e.Data.GetDataPresent("AdbFiles") ||
+                e.Data.GetDataPresent("FileGroupDescriptor") ||
+                e.Data.GetDataPresent("FileGroupDescriptorW"))
             {
                 e.Effects = DragDropEffects.Copy;
             }
@@ -1141,7 +1147,12 @@ namespace AdbExplorer
                     }
                 }
 
-                if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                // Check for Outlook virtual files first
+                if (e.Data.GetDataPresent("FileGroupDescriptor") || e.Data.GetDataPresent("FileGroupDescriptorW"))
+                {
+                    await HandleOutlookDrop(e.Data, targetPath);
+                }
+                else if (e.Data.GetDataPresent(DataFormats.FileDrop))
                 {
                     string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
 
@@ -1367,9 +1378,254 @@ namespace AdbExplorer
             }
         }
 
+        private async Task HandleOutlookDrop(IDataObject dataObject, string targetPath)
+        {
+            try
+            {
+                StatusText.Text = "Processing Outlook files...";
+
+                // Get file descriptor to get file names
+                string[] fileNames = null;
+                
+                // Try Unicode version first
+                if (dataObject.GetDataPresent("FileGroupDescriptorW"))
+                {
+                    var descriptorStream = dataObject.GetData("FileGroupDescriptorW") as MemoryStream;
+                    if (descriptorStream != null)
+                    {
+                        fileNames = GetFileNamesFromDescriptorW(descriptorStream);
+                    }
+                }
+                // Fall back to ANSI version
+                else if (dataObject.GetDataPresent("FileGroupDescriptor"))
+                {
+                    var descriptorStream = dataObject.GetData("FileGroupDescriptor") as MemoryStream;
+                    if (descriptorStream != null)
+                    {
+                        fileNames = GetFileNamesFromDescriptor(descriptorStream);
+                    }
+                }
+
+                if (fileNames == null || fileNames.Length == 0)
+                {
+                    StatusText.Text = "No files found in Outlook drop";
+                    return;
+                }
+
+                // Process each file
+                int uploadedCount = 0;
+                var errors = new List<string>();
+                var tempDir = Path.Combine(Path.GetTempPath(), "AdbExplorer", "OutlookDrop", Guid.NewGuid().ToString());
+                Directory.CreateDirectory(tempDir);
+
+                for (int i = 0; i < fileNames.Length; i++)
+                {
+                    try
+                    {
+                        StatusText.Text = $"Processing {fileNames[i]}...";
+
+                        // Get file contents using COM interop
+                        MemoryStream fileContents = null;
+                        try
+                        {
+                            // Get the IDataObject as COM object to access indexed FileContents
+                            var comDataObject = dataObject as System.Runtime.InteropServices.ComTypes.IDataObject;
+                            if (comDataObject != null)
+                            {
+                                var format = new System.Runtime.InteropServices.ComTypes.FORMATETC
+                                {
+                                    cfFormat = (short)DataFormats.GetDataFormat("FileContents").Id,
+                                    dwAspect = System.Runtime.InteropServices.ComTypes.DVASPECT.DVASPECT_CONTENT,
+                                    lindex = i,
+                                    ptd = IntPtr.Zero,
+                                    tymed = System.Runtime.InteropServices.ComTypes.TYMED.TYMED_ISTREAM |
+                                            System.Runtime.InteropServices.ComTypes.TYMED.TYMED_HGLOBAL
+                                };
+
+                                System.Runtime.InteropServices.ComTypes.STGMEDIUM medium;
+                                comDataObject.GetData(ref format, out medium);
+
+                                if (medium.tymed == System.Runtime.InteropServices.ComTypes.TYMED.TYMED_ISTREAM)
+                                {
+                                    var iStream = (System.Runtime.InteropServices.ComTypes.IStream)Marshal.GetObjectForIUnknown(medium.unionmember);
+                                    var buffer = new byte[1024];
+                                    fileContents = new MemoryStream();
+                                    int bytesRead;
+                                    do
+                                    {
+                                        iStream.Read(buffer, buffer.Length, IntPtr.Zero);
+                                        bytesRead = Marshal.ReadInt32(IntPtr.Zero);
+                                        if (bytesRead > 0)
+                                            fileContents.Write(buffer, 0, bytesRead);
+                                    } while (bytesRead > 0);
+                                    fileContents.Position = 0;
+                                }
+                                else if (medium.tymed == System.Runtime.InteropServices.ComTypes.TYMED.TYMED_HGLOBAL)
+                                {
+                                    var ptr = Marshal.ReadIntPtr(medium.unionmember);
+                                    var size = (int)GlobalSize(ptr);
+                                    var data = new byte[size];
+                                    Marshal.Copy(ptr, data, 0, size);
+                                    fileContents = new MemoryStream(data);
+                                }
+
+                                Marshal.ReleaseComObject(medium.pUnkForRelease);
+                            }
+                        }
+                        catch
+                        {
+                            // Fall back to trying without index (may work for single file)
+                            fileContents = dataObject.GetData("FileContents") as MemoryStream;
+                        }
+                        
+                        if (fileContents != null)
+                        {
+                            // Save to temp file
+                            string tempFile = Path.Combine(tempDir, fileNames[i]);
+                            using (var fs = new FileStream(tempFile, FileMode.Create))
+                            {
+                                fileContents.CopyTo(fs);
+                            }
+                            fileContents.Dispose();
+
+                            // Upload to device
+                            string remotePath = targetPath + "/" + fileNames[i];
+                            await Task.Run(() => fileSystemService.PushFile(tempFile, remotePath, false));
+                            
+                            // Set permissions
+                            await Task.Run(() => fileSystemService.SetFilePermissions(remotePath, "660"));
+                            
+                            uploadedCount++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"{fileNames[i]}: {ex.Message}");
+                    }
+                }
+
+                // Clean up temp directory
+                try
+                {
+                    Directory.Delete(tempDir, true);
+                }
+                catch { /* Ignore cleanup errors */ }
+
+                // Refresh and show status
+                await RefreshCurrentFolder();
+
+                if (errors.Count == 0)
+                {
+                    StatusText.Text = $"Uploaded {uploadedCount} file(s) from Outlook";
+                }
+                else
+                {
+                    StatusText.Text = $"Uploaded {uploadedCount} file(s), {errors.Count} error(s)";
+                    if (errors.Count > 0)
+                    {
+                        string errorMessage = "Some files could not be uploaded:\n\n" +
+                                             string.Join("\n", errors.Take(5));
+                        if (errors.Count > 5)
+                            errorMessage += $"\n... and {errors.Count - 5} more";
+
+                        MessageBox.Show(errorMessage, "Upload Errors",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error handling Outlook drop: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusText.Text = "Outlook drop operation failed";
+            }
+        }
+
+        private string[] GetFileNamesFromDescriptorW(MemoryStream stream)
+        {
+            var fileNames = new List<string>();
+            stream.Position = 0;
+            
+            using (var reader = new BinaryReader(stream))
+            {
+                // Read the count of items
+                int count = reader.ReadInt32();
+                
+                // Skip to the file descriptor array (after count field)
+                for (int i = 0; i < count; i++)
+                {
+                    // Read FILEDESCRIPTORW structure
+                    reader.ReadInt32(); // dwFlags
+                    reader.ReadBytes(16); // clsid
+                    reader.ReadBytes(8); // sizel
+                    reader.ReadBytes(8); // pointl
+                    reader.ReadInt32(); // dwFileAttributes
+                    reader.ReadBytes(8); // ftCreationTime
+                    reader.ReadBytes(8); // ftLastAccessTime
+                    reader.ReadBytes(8); // ftLastWriteTime
+                    reader.ReadInt32(); // nFileSizeHigh
+                    reader.ReadInt32(); // nFileSizeLow
+                    
+                    // Read filename (520 bytes for wide char MAX_PATH)
+                    byte[] nameBytes = reader.ReadBytes(520);
+                    string fileName = System.Text.Encoding.Unicode.GetString(nameBytes);
+                    int nullIndex = fileName.IndexOf('\0');
+                    if (nullIndex >= 0)
+                        fileName = fileName.Substring(0, nullIndex);
+                    
+                    if (!string.IsNullOrEmpty(fileName))
+                        fileNames.Add(fileName);
+                }
+            }
+            
+            return fileNames.ToArray();
+        }
+
+        private string[] GetFileNamesFromDescriptor(MemoryStream stream)
+        {
+            var fileNames = new List<string>();
+            stream.Position = 0;
+            
+            using (var reader = new BinaryReader(stream))
+            {
+                // Read the count of items
+                int count = reader.ReadInt32();
+                
+                // Skip to the file descriptor array (after count field)
+                for (int i = 0; i < count; i++)
+                {
+                    // Read FILEDESCRIPTORA structure
+                    reader.ReadInt32(); // dwFlags
+                    reader.ReadBytes(16); // clsid
+                    reader.ReadBytes(8); // sizel
+                    reader.ReadBytes(8); // pointl
+                    reader.ReadInt32(); // dwFileAttributes
+                    reader.ReadBytes(8); // ftCreationTime
+                    reader.ReadBytes(8); // ftLastAccessTime
+                    reader.ReadBytes(8); // ftLastWriteTime
+                    reader.ReadInt32(); // nFileSizeHigh
+                    reader.ReadInt32(); // nFileSizeLow
+                    
+                    // Read filename (260 bytes for ANSI MAX_PATH)
+                    byte[] nameBytes = reader.ReadBytes(260);
+                    string fileName = System.Text.Encoding.Default.GetString(nameBytes);
+                    int nullIndex = fileName.IndexOf('\0');
+                    if (nullIndex >= 0)
+                        fileName = fileName.Substring(0, nullIndex);
+                    
+                    if (!string.IsNullOrEmpty(fileName))
+                        fileNames.Add(fileName);
+                }
+            }
+            
+            return fileNames.ToArray();
+        }
+
         private void Window_DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            if (e.Data.GetDataPresent(DataFormats.FileDrop) ||
+                e.Data.GetDataPresent("FileGroupDescriptor") ||
+                e.Data.GetDataPresent("FileGroupDescriptorW"))
             {
                 e.Effects = DragDropEffects.Copy;
             }
@@ -1382,7 +1638,9 @@ namespace AdbExplorer
 
         private void Window_Drop(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            if (e.Data.GetDataPresent(DataFormats.FileDrop) ||
+                e.Data.GetDataPresent("FileGroupDescriptor") ||
+                e.Data.GetDataPresent("FileGroupDescriptorW"))
             {
                 FileListView_Drop(sender, e);
             }
