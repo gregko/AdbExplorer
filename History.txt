@@ -1,6 +1,13 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.2.5 - 2025-08-25
+---------------------------
+- Fixed file deletion for files with special characters (Unicode/Chinese):
+  * Files with Chinese characters and other Unicode names can now be deleted successfully
+  * Improved handling of problematic filenames by using hex encoding for shell commands
+  * Falls back to rename-then-delete strategy when direct deletion fails
+
 Version 1.2.4 - 2025-08-24
 ---------------------------
 - Fixed drag & drop error when dragging files from Windows desktop:

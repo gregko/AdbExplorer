@@ -1901,7 +1901,8 @@ namespace AdbExplorer
                         }
                         catch (Exception ex)
                         {
-                            errors.Add($"{item.Name}: {ex.Message}");
+                            // Add more detailed error information
+                            errors.Add($"{item.Name} ({item.FullPath}): {ex.Message}");
                         }
                     }
 

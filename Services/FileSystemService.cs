@@ -376,29 +376,74 @@ namespace AdbExplorer.Services
 
         public void DeleteItem(string path)
         {
-            // For delete operations, use single quotes to handle special characters
-            var escapedPath = EscapePathForShell(path);
-
-            // Check if directory
-            var checkDir = adbService.ExecuteShellCommand($"test -d {escapedPath} && echo dir || echo file");
-
-            if (checkDir.Trim() == "dir")
+            // Use the same hex escaping method that works for rename operations
+            // Get directory and generate a simple temporary name  
+            var directory = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/');
+            if (string.IsNullOrEmpty(directory)) directory = "/sdcard";
+            var tempName = $"{directory}/tmpdel_{DateTime.Now.Ticks}";
+            
+            // Check if it's a directory first using hex encoding
+            var pathEscaped = EscapePathForShell(path);
+            var checkDir = adbService.ExecuteShellCommand($"test -d {pathEscaped} && echo dir || echo file");
+            bool isDirectory = checkDir.Trim() == "dir";
+            
+            // First attempt: Try to rename the file to a simple name using the same method that works
+            // Use hex encoding for the source path and plain quotes for the simple temp name
+            var renameCmd = $"mv {pathEscaped} '{tempName}'";
+            var renameResult = adbService.ExecuteShellCommand(renameCmd + " 2>&1");
+            
+            // Check if rename succeeded (no error output means success)
+            if (string.IsNullOrWhiteSpace(renameResult) || (!renameResult.Contains("cannot") && !renameResult.Contains("failed") && !renameResult.Contains("No such")))
             {
-                adbService.ExecuteShellCommand($"rm -rf {escapedPath}");
+                // Rename succeeded, now delete the file with the simple name
+                string deleteResult;
+                if (isDirectory)
+                {
+                    deleteResult = adbService.ExecuteShellCommand($"rm -rf '{tempName}' 2>&1");
+                }
+                else
+                {
+                    deleteResult = adbService.ExecuteShellCommand($"rm -f '{tempName}' 2>&1");
+                }
+                
+                // Verify the temp file was deleted
+                var checkDeleted = adbService.ExecuteShellCommand($"test -e '{tempName}' && echo exists || echo gone");
+                if (checkDeleted.Trim() == "exists")
+                {
+                    throw new Exception($"Failed to delete renamed file. The file was renamed to {tempName} but could not be deleted. Delete result: {deleteResult}");
+                }
             }
             else
             {
-                adbService.ExecuteShellCommand($"rm -f {escapedPath}");
+                // Rename failed, try direct deletion using hex encoding
+                string deleteResult;
+                if (isDirectory)
+                {
+                    deleteResult = adbService.ExecuteShellCommand($"rm -rf {pathEscaped} 2>&1");
+                }
+                else  
+                {
+                    deleteResult = adbService.ExecuteShellCommand($"rm -f {pathEscaped} 2>&1");
+                }
+                
+                // Check if the original file still exists
+                var checkExists = adbService.ExecuteShellCommand($"test -e {pathEscaped} && echo exists || echo gone");
+                if (checkExists.Trim() == "exists")
+                {
+                    throw new Exception($"Failed to delete file: {path}. Rename failed with: {renameResult}. Direct delete failed with: {deleteResult}");
+                }
             }
         }
-
-        // Helper method for escaping paths in shell commands that modify files (rm, cp, mv)
+        
+        // Use the same hex encoding method that works for rename operations
         private string EscapePathForShell(string path)
         {
-            // Use single quotes and escape any single quotes in the path
-            // This handles special characters better for rm, cp, mv commands
-            return "'" + path.Replace("'", "'\\''") + "'";
+            // For very complex cases, we use printf to handle the escaping
+            // This handles all special characters including unicode characters
+            var hexPath = BitConverter.ToString(System.Text.Encoding.UTF8.GetBytes(path)).Replace("-", "\\x");
+            return "$'\\x" + hexPath + "'";
         }
+
 
         public bool PullFile(string remotePath, string localPath)
         {

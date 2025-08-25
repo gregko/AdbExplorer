@@ -6,9 +6,9 @@
     <Nullable>enable</Nullable>
     <ApplicationIcon>Resources\icon.ico</ApplicationIcon>
     <UseWindowsForms>false</UseWindowsForms>
-    <AssemblyVersion>1.2.4</AssemblyVersion>
-    <FileVersion>1.2.4</FileVersion>
-    <ProductVersion>1.2.4</ProductVersion>
+    <AssemblyVersion>1.2.5</AssemblyVersion>
+    <FileVersion>1.2.5</FileVersion>
+    <ProductVersion>1.2.5</ProductVersion>
   </PropertyGroup>
 
   <ItemGroup>
