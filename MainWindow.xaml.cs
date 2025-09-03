@@ -1,3 +1,4 @@
+using AdbExplorer.Helpers;
 using AdbExplorer.Models;
 using AdbExplorer.Services;
 using CommunityToolkit.Mvvm.Input;
@@ -662,7 +663,7 @@ namespace AdbExplorer
                 var files = await Task.Run(() => fileSystemService.GetFiles(path));
 
                 currentFiles.Clear();
-                foreach (var file in files.OrderBy(f => !f.IsDirectory).ThenBy(f => f.Name))
+                foreach (var file in files.OrderBy(f => !f.IsDirectory).ThenBy(f => f.Name, new NaturalStringComparer()))
                 {
                     currentFiles.Add(file);
                 }
@@ -1273,6 +1274,56 @@ namespace AdbExplorer
 
         private async Task HandleExternalFileDrop(string[] files, string targetPath)
         {
+            // Check for existing files and get user confirmation if needed
+            var existingFiles = new List<string>();
+            var existingFilesInTarget = new HashSet<string>();
+
+            // Get current files in target directory
+            try
+            {
+                var targetFiles = await Task.Run(() => fileSystemService.GetFiles(targetPath));
+                foreach (var targetFile in targetFiles)
+                {
+                    existingFilesInTarget.Add(targetFile.Name.ToLowerInvariant());
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Error checking target directory: {ex.Message}";
+                return;
+            }
+
+            // Check which files would be overwritten
+            foreach (string file in files)
+            {
+                string fileName = Path.GetFileName(file);
+                if (existingFilesInTarget.Contains(fileName.ToLowerInvariant()))
+                {
+                    existingFiles.Add(fileName);
+                }
+            }
+
+            // Show overwrite confirmation dialog if there are conflicts
+            if (existingFiles.Count > 0)
+            {
+                string fileList = existingFiles.Count <= 5 
+                    ? string.Join("\n", existingFiles)
+                    : string.Join("\n", existingFiles.Take(5)) + $"\n... and {existingFiles.Count - 5} more";
+
+                string message = existingFiles.Count == 1
+                    ? $"The following file already exists:\n\n{fileList}\n\nDo you want to overwrite it?"
+                    : $"The following files already exist:\n\n{fileList}\n\nDo you want to overwrite them?";
+
+                var result = MessageBox.Show(message, "Overwrite Files",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.No)
+                {
+                    StatusText.Text = "Upload cancelled";
+                    return;
+                }
+            }
+
             StatusText.Text = $"Uploading {files.Length} item(s) to {targetPath}...";
 
             int uploadedCount = 0;
@@ -2177,7 +2228,7 @@ namespace AdbExplorer
                         return;
                     }
 
-                    foreach (var file in files.Where(f => f.IsDirectory).OrderBy(f => f.Name))
+                    foreach (var file in files.Where(f => f.IsDirectory).OrderBy(f => f.Name, new NaturalStringComparer()))
                     {
                         var childNode = new FolderNode
                         {

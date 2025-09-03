@@ -1,6 +1,18 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.2.6 - 2025-01-03
+---------------------------
+- Improved file name sorting with natural number ordering:
+  * Files are now sorted naturally (Chapter1, Chapter2, Chapter11 instead of Chapter1, Chapter11, Chapter2)
+  * Applied to both file list view and folder tree navigation
+  * Handles mixed alphanumeric file names correctly
+- Added file overwrite confirmation for drag & drop operations:
+  * Shows confirmation dialog when dropping files that already exist in target directory
+  * Lists which files would be overwritten with option to cancel
+  * Supports both single and multiple file conflicts
+  * Prevents accidental file overwrites during drag & drop
+
 Version 1.2.5 - 2025-08-25
 ---------------------------
 - Fixed file deletion for files with special characters (Unicode/Chinese):
