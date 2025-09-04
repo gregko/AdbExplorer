@@ -1,6 +1,16 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.2.7 - 2025-01-04
+---------------------------
+- Fixed duplicate file overwrite prompts during drag & drop:
+  * Overwrite confirmation dialog now appears only once instead of twice
+  * Fixed event bubbling issue between ListView and Window drop handlers
+- Improved overwrite dialog visibility and positioning:
+  * AdbExplorer window is now brought to foreground when overwrite prompt appears
+  * Overwrite dialog is centered on AdbExplorer window instead of screen center
+  * Prevents hidden dialogs when AdbExplorer is behind other windows
+
 Version 1.2.6 - 2025-01-03
 ---------------------------
 - Improved file name sorting with natural number ordering:

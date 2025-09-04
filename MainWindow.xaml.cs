@@ -1128,6 +1128,7 @@ namespace AdbExplorer
 
         private async void FileListView_Drop(object sender, DragEventArgs e)
         {
+            e.Handled = true; // Prevent event bubbling to Window_Drop
             try
             {
                 // Determine the drop target (folder or current directory)
@@ -1306,6 +1307,11 @@ namespace AdbExplorer
             // Show overwrite confirmation dialog if there are conflicts
             if (existingFiles.Count > 0)
             {
+                // Bring window to foreground before showing dialog
+                this.Activate();
+                this.Topmost = true;
+                this.Topmost = false; // Reset topmost to avoid staying on top permanently
+
                 string fileList = existingFiles.Count <= 5 
                     ? string.Join("\n", existingFiles)
                     : string.Join("\n", existingFiles.Take(5)) + $"\n... and {existingFiles.Count - 5} more";
@@ -1314,7 +1320,7 @@ namespace AdbExplorer
                     ? $"The following file already exists:\n\n{fileList}\n\nDo you want to overwrite it?"
                     : $"The following files already exist:\n\n{fileList}\n\nDo you want to overwrite them?";
 
-                var result = MessageBox.Show(message, "Overwrite Files",
+                var result = MessageBox.Show(this, message, "Overwrite Files",
                     MessageBoxButton.YesNo, MessageBoxImage.Question);
 
                 if (result == MessageBoxResult.No)
