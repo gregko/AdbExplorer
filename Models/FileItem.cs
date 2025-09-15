@@ -2,6 +2,7 @@ using System;
 
 namespace AdbExplorer.Models
 {
+    [Serializable]
     public class FileItem
     {
         public string Name { get; set; } = "";

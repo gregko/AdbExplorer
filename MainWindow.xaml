@@ -133,7 +133,10 @@
                 <TreeView Name="FolderTreeView" 
                           SelectedItemChanged="FolderTreeView_SelectedItemChanged"
                           PreviewMouseRightButtonDown="TreeView_PreviewMouseRightButtonDown"
-                          TreeViewItem.Expanded="TreeViewItem_Expanded">
+                          TreeViewItem.Expanded="TreeViewItem_Expanded"
+                          AllowDrop="True"
+                          DragOver="FolderTreeView_DragOver"
+                          Drop="FolderTreeView_Drop">
                     <TreeView.ItemTemplate>
                         <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                             <StackPanel Orientation="Horizontal">

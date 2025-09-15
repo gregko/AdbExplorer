@@ -1849,6 +1849,88 @@ namespace AdbExplorer
             }
         }
 
+        private void FolderTreeView_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop) || 
+                e.Data.GetDataPresent("AdbFiles") ||
+                e.Data.GetDataPresent("FileGroupDescriptor") ||
+                e.Data.GetDataPresent("FileGroupDescriptorW"))
+            {
+                e.Effects = DragDropEffects.Copy;
+            }
+            else
+            {
+                e.Effects = DragDropEffects.None;
+            }
+            e.Handled = true;
+        }
+
+        private async void FolderTreeView_Drop(object sender, DragEventArgs e)
+        {
+            e.Handled = true;
+            try
+            {
+                // Find the target folder from the drop position
+                string targetPath = currentPath; // Default to current path
+                
+                var hitTest = VisualTreeHelper.HitTest(FolderTreeView, e.GetPosition(FolderTreeView));
+                if (hitTest != null)
+                {
+                    var treeViewItem = FindAncestor<TreeViewItem>(hitTest.VisualHit);
+                    if (treeViewItem != null && treeViewItem.DataContext is FolderNode targetFolder)
+                    {
+                        targetPath = targetFolder.FullPath;
+                        StatusText.Text = $"Dropping into {targetFolder.Name}...";
+                    }
+                }
+
+                // Handle the drop using existing logic
+                if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                {
+                    string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                    bool isFromAdbExplorer = e.Data.GetDataPresent("AdbFiles");
+                    var sourceWindowId = e.Data.GetData("SourceWindowId") as int?;
+
+                    if (isFromAdbExplorer && sourceWindowId == this.windowId)
+                    {
+                        // Internal drag within same window
+                        var adbFiles = e.Data.GetData("AdbFiles") as List<FileItem>;
+                        if (adbFiles != null)
+                        {
+                            await HandleInternalDrop(adbFiles, targetPath);
+                        }
+                    }
+                    else
+                    {
+                        // External drop or from another AdbExplorer window
+                        await HandleExternalFileDrop(files, targetPath);
+                    }
+                }
+                else if (e.Data.GetDataPresent("FileGroupDescriptor") || e.Data.GetDataPresent("FileGroupDescriptorW"))
+                {
+                    await HandleOutlookDrop(e.Data, targetPath);
+                }
+                else if (e.Data.GetDataPresent("AdbFiles"))
+                {
+                    // Internal drag without FileDrop
+                    var sourceWindowId = e.Data.GetData("SourceWindowId") as int?;
+                    if (sourceWindowId == this.windowId)
+                    {
+                        var adbFiles = e.Data.GetData("AdbFiles") as List<FileItem>;
+                        if (adbFiles != null)
+                        {
+                            await HandleInternalDrop(adbFiles, targetPath);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error during drop operation: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusText.Text = "Drop operation failed";
+            }
+        }
 
         // Context menu handlers
         private async void NewFolderButton_Click(object sender, RoutedEventArgs e)
@@ -2121,65 +2203,125 @@ namespace AdbExplorer
 
         private void CopyMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            // Implement copy functionality
-            var selectedItems = FileListView.SelectedItems.Cast<FileItem>().ToList();
-            if (selectedItems.Count > 0)
+            try
             {
-                Clipboard.SetData("AdbFiles", selectedItems);
-                StatusText.Text = $"Copied {selectedItems.Count} item(s)";
+                // Implement copy functionality
+                var selectedItems = FileListView.SelectedItems.Cast<FileItem>().ToList();
+                if (selectedItems.Count > 0)
+                {
+                    Clipboard.SetData("AdbFiles", selectedItems);
+                    StatusText.Text = $"Copied {selectedItems.Count} item(s)";
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error during copy operation: {ex.Message}", "Copy Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusText.Text = "Copy operation failed";
             }
         }
 
         private async void PasteMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            // Implement paste functionality
-            if (Clipboard.ContainsData("AdbFiles"))
+            try
             {
-                var items = Clipboard.GetData("AdbFiles") as List<FileItem>;
-                if (items != null)
-                {
-                    StatusText.Text = $"Pasting {items.Count} item(s)...";
+                // Implement paste functionality with proper error handling for clipboard data
+                bool hasAdbFiles = false;
+                List<FileItem> items = null;
 
-                    foreach (var item in items)
+                try
+                {
+                    hasAdbFiles = Clipboard.ContainsData("AdbFiles");
+                }
+                catch (System.Runtime.InteropServices.COMException)
+                {
+                    // Clipboard data is corrupted or invalid
+                    StatusText.Text = "Clipboard data is invalid or corrupted";
+                    return;
+                }
+
+                if (hasAdbFiles)
+                {
+                    try
                     {
-                        try
-                        {
-                            string destPath = currentPath + "/" + item.Name;
-                            await Task.Run(() =>
-                            {
-                                if (item.IsDirectory)
-                                {
-                                    adbService.ExecuteShellCommand($"cp -r \"{item.FullPath}\" \"{destPath}\"");
-                                    // Set permissions recursively for directories
-                                    try
-                                    {
-                                        adbService.ExecuteShellCommand($"chmod -R 770 \"{destPath}\"");
-                                        adbService.ExecuteShellCommand($"find \"{destPath}\" -type f -exec chmod 660 {{}} \\;");
-                                    }
-                                    catch { /* Ignore permission errors */ }
-                                }
-                                else
-                                {
-                                    adbService.ExecuteShellCommand($"cp \"{item.FullPath}\" \"{destPath}\"");
-                                    // Set permissions to 660 for copied file
-                                    try
-                                    {
-                                        adbService.ExecuteShellCommand($"chmod 660 \"{destPath}\"");
-                                    }
-                                    catch { /* Ignore permission errors */ }
-                                }
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show($"Error pasting {item.Name}: {ex.Message}", "Error",
-                                MessageBoxButton.OK, MessageBoxImage.Error);
-                        }
+                        items = Clipboard.GetData("AdbFiles") as List<FileItem>;
+                    }
+                    catch (System.Runtime.InteropServices.COMException)
+                    {
+                        // Clipboard data is corrupted or invalid
+                        StatusText.Text = "Failed to read clipboard data - data may be corrupted";
+                        return;
                     }
 
-                    await RefreshCurrentFolder();
-                    StatusText.Text = "Paste completed";
+                    if (items != null)
+                    {
+                        // Use the same logic as HandleInternalDrop for consistency
+                        var result = MessageBox.Show($"Paste {items.Count} item(s) to {currentPath}?", "Paste Files",
+                            MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                        if (result == MessageBoxResult.Yes)
+                        {
+                            foreach (var file in items)
+                            {
+                                try
+                                {
+                                    StatusText.Text = $"Pasting {file.Name}...";
+                                    string destPath = currentPath + "/" + file.Name;
+
+                                    var sourceEscaped = EscapeForShell(file.FullPath);
+                                    var destEscaped = EscapeForShell(destPath);
+
+                                    await Task.Run(() =>
+                                    {
+                                        if (file.IsDirectory)
+                                        {
+                                            adbService.ExecuteShellCommand($"cp -r {sourceEscaped} {destEscaped}");
+                                            // Set permissions recursively for directories
+                                            try
+                                            {
+                                                adbService.ExecuteShellCommand($"chmod -R 770 {destEscaped}");
+                                                adbService.ExecuteShellCommand($"find {destEscaped} -type f -exec chmod 660 {{}} \\;");
+                                            }
+                                            catch { /* Ignore permission errors */ }
+                                        }
+                                        else
+                                        {
+                                            adbService.ExecuteShellCommand($"cp {sourceEscaped} {destEscaped}");
+                                            // Set permissions to 660 for copied file
+                                            try
+                                            {
+                                                adbService.ExecuteShellCommand($"chmod 660 {destEscaped}");
+                                            }
+                                            catch { /* Ignore permission errors */ }
+                                        }
+                                    });
+                                }
+                                catch (Exception ex)
+                                {
+                                    MessageBox.Show($"Error pasting {file.Name}: {ex.Message}", "Error",
+                                        MessageBoxButton.OK, MessageBoxImage.Error);
+                                }
+                            }
+
+                            await RefreshCurrentFolder();
+                            StatusText.Text = "Paste completed";
+                        }
+                        else
+                        {
+                            StatusText.Text = "Paste cancelled";
+                        }
+                    }
                 }
+                else
+                {
+                    StatusText.Text = "No files to paste";
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error during paste operation: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusText.Text = "Paste operation failed";
             }
         }
 

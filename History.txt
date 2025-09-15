@@ -1,7 +1,16 @@
 ADB Explorer - Version History
 ==============================
 
-Version 1.2.7 - 2025-01-04
+Version 1.2.8 - 2025-09-15
+---------------------------
+- Fixed drag and drop functionality:
+  * Added drag and drop support for TreeView (left panel) - files can now be dragged from right panel to folders in left panel
+  * Fixed clipboard copy/paste operations that were not working due to serialization issues
+  * Made FileItem class serializable to properly store data on clipboard
+  * Improved paste operation with user confirmation dialog and proper error handling
+  * Copy/Paste now works reliably within ADB Explorer using same logic as drag and drop
+
+Version 1.2.7 - 2025-09-04
 ---------------------------
 - Fixed duplicate file overwrite prompts during drag & drop:
   * Overwrite confirmation dialog now appears only once instead of twice
@@ -11,7 +20,7 @@ Version 1.2.7 - 2025-01-04
   * Overwrite dialog is centered on AdbExplorer window instead of screen center
   * Prevents hidden dialogs when AdbExplorer is behind other windows
 
-Version 1.2.6 - 2025-01-03
+Version 1.2.6 - 2025-09-03
 ---------------------------
 - Improved file name sorting with natural number ordering:
   * Files are now sorted naturally (Chapter1, Chapter2, Chapter11 instead of Chapter1, Chapter11, Chapter2)
