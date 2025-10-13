@@ -46,6 +46,10 @@ namespace AdbExplorer
         private static int windowCounter = 0;
         private int windowId;
         private ObservableCollection<FavoriteItem> favoritesCollection;
+        private bool suppressDeviceSelectionHandling = false;
+        private string? activeDeviceId;
+        private bool isDeviceRefreshInProgress;
+        private bool pendingDeviceRefresh;
 
         // Keep the parameterless constructor for XAML
         public MainWindow() : this(null, null)
@@ -62,7 +66,7 @@ namespace AdbExplorer
             UpdateWindowCount();
 
             InitializeServices();
-            LoadDevices(initialDevice, initialPath);
+            RequestDeviceRefresh(initialDevice, initialPath);
 
             // Add keyboard handler
             this.PreviewKeyDown += Window_PreviewKeyDown;
@@ -296,6 +300,8 @@ namespace AdbExplorer
             settings = Settings.Load();
 
             adbService = new AdbService();
+            adbService.DevicesChanged += AdbService_DevicesChanged;
+            adbService.StartDeviceTracking();
             fileSystemService = new FileSystemService(adbService);
             devices = new ObservableCollection<AndroidDevice>();
             currentFiles = new ObservableCollection<FileItem>();
@@ -366,22 +372,48 @@ namespace AdbExplorer
             notificationTimer.Start();
         }
 
-        private async void LoadDevices(string? initialDevice = null, string? initialPath = null)
+        private void AdbService_DevicesChanged(object? sender, EventArgs e)
         {
+            Trace.WriteLine("MainWindow detected adb device change event.");
+            Dispatcher.InvokeAsync(() => RequestDeviceRefresh());
+        }
+
+        private void RequestDeviceRefresh(string? initialDevice = null, string? initialPath = null)
+        {
+            Trace.WriteLine("MainWindow scheduling device refresh.");
+            if (isDeviceRefreshInProgress)
+            {
+                pendingDeviceRefresh = true;
+                return;
+            }
+
+            _ = LoadDevicesAsync(initialDevice, initialPath);
+        }
+
+        private async Task LoadDevicesAsync(string? initialDevice = null, string? initialPath = null)
+        {
+            isDeviceRefreshInProgress = true;
             try
             {
                 StatusText.Text = "Scanning for devices...";
+
+                var previouslySelectedDeviceId = (DeviceComboBox.SelectedItem as AndroidDevice)?.Id;
                 var deviceList = await Task.Run(() => adbService.GetDevices());
 
+                Trace.WriteLine($"MainWindow obtained {deviceList.Count} device(s) from adb.");
                 devices.Clear();
+
                 foreach (var device in deviceList)
                 {
+                    Trace.WriteLine($"MainWindow adding device {device.Id} ({device.Model})");
                     devices.Add(device);
                 }
 
+                // ObservableCollection automatically notifies the ComboBox of changes
+                // No need to call Items.Refresh() when ItemsSource is bound
+
                 if (devices.Count > 0)
                 {
-                    // Try to select the specified device or restore last device
                     AndroidDevice? deviceToSelect = null;
 
                     if (!string.IsNullOrEmpty(initialDevice))
@@ -389,21 +421,31 @@ namespace AdbExplorer
                         deviceToSelect = devices.FirstOrDefault(d => d.Id == initialDevice);
                     }
 
-                    if (deviceToSelect == null)
+                    if (deviceToSelect == null && !string.IsNullOrEmpty(previouslySelectedDeviceId))
+                    {
+                        deviceToSelect = devices.FirstOrDefault(d => d.Id == previouslySelectedDeviceId);
+                    }
+
+                    if (deviceToSelect == null && !string.IsNullOrEmpty(settings.LastDevice))
                     {
                         deviceToSelect = devices.FirstOrDefault(d => d.Id == settings.LastDevice);
                     }
 
-                    if (deviceToSelect != null)
+                    deviceToSelect ??= devices.First();
+
+                    Trace.WriteLine($"MainWindow selecting device {deviceToSelect.Id}");
+
+                    var isSameDevice = !string.IsNullOrEmpty(previouslySelectedDeviceId) &&
+                                       deviceToSelect.Id == previouslySelectedDeviceId;
+
+                    if (isSameDevice)
                     {
-                        DeviceComboBox.SelectedItem = deviceToSelect;
-                    }
-                    else
-                    {
-                        DeviceComboBox.SelectedIndex = 0;
+                        suppressDeviceSelectionHandling = true;
+                        Dispatcher.BeginInvoke(new Action(() => suppressDeviceSelectionHandling = false), DispatcherPriority.Background);
                     }
 
-                    // Store initial path for navigation after device selection
+                    DeviceComboBox.SelectedItem = deviceToSelect;
+
                     if (!string.IsNullOrEmpty(initialPath))
                     {
                         settings.LastPath = initialPath;
@@ -411,6 +453,9 @@ namespace AdbExplorer
                 }
                 else
                 {
+                    suppressDeviceSelectionHandling = false;
+                    DeviceComboBox.SelectedIndex = -1;
+                    activeDeviceId = null;
                     ConnectionStatusLabel.Content = "No devices found";
                     ConnectionStatusLabel.Foreground = System.Windows.Media.Brushes.Red;
                 }
@@ -422,6 +467,18 @@ namespace AdbExplorer
                 MessageBox.Show($"Error loading devices: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 StatusText.Text = "Error loading devices";
+                Trace.WriteLine($"MainWindow failed to load devices: {ex.Message}");
+            }
+            finally
+            {
+                isDeviceRefreshInProgress = false;
+                Trace.WriteLine($"MainWindow device refresh complete. Pending? {pendingDeviceRefresh}");
+
+                if (pendingDeviceRefresh)
+                {
+                    pendingDeviceRefresh = false;
+                    RequestDeviceRefresh();
+                }
             }
         }
 
@@ -436,11 +493,26 @@ namespace AdbExplorer
 
         private async void DeviceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (DeviceComboBox.SelectedItem is AndroidDevice device)
+            if (DeviceComboBox.SelectedItem is not AndroidDevice device)
+            {
+                activeDeviceId = null;
+                return;
+            }
+
+            bool bypassReload = suppressDeviceSelectionHandling && activeDeviceId == device.Id;
+
+            Trace.WriteLine($"MainWindow selection changed to {device.Id}, bypassReload={bypassReload}");
+            try
             {
                 adbService.SetCurrentDevice(device.Id);
                 ConnectionStatusLabel.Content = $"Connected: {device.Model}";
                 ConnectionStatusLabel.Foreground = System.Windows.Media.Brushes.Green;
+                activeDeviceId = device.Id;
+
+                if (bypassReload)
+                {
+                    return;
+                }
 
                 // Save selected device
                 settings.LastDevice = device.Id;
@@ -459,6 +531,11 @@ namespace AdbExplorer
                 {
                     await NavigateToPath("/");
                 }
+            }
+            finally
+            {
+                suppressDeviceSelectionHandling = false;
+                Trace.WriteLine("MainWindow selection handler reset suppression flag.");
             }
         }
 
@@ -1750,7 +1827,7 @@ namespace AdbExplorer
 
         private void RefreshDevicesButton_Click(object sender, RoutedEventArgs e)
         {
-            LoadDevices();
+            RequestDeviceRefresh();
         }
 
         private async Task RefreshCurrentFolder()
@@ -2517,6 +2594,12 @@ namespace AdbExplorer
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
+            if (adbService != null)
+            {
+                adbService.DevicesChanged -= AdbService_DevicesChanged;
+                adbService.StopDeviceTracking();
+            }
+
             allWindows.Remove(this);
             UpdateWindowCount();
 

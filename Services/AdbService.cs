@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using AdbExplorer.Models;
 
 namespace AdbExplorer.Services
@@ -12,6 +14,9 @@ namespace AdbExplorer.Services
     {
         private string adbPath = "adb";
         private string? currentDeviceId;
+        private CancellationTokenSource? deviceTrackerCts;
+        private Task? deviceTrackerTask;
+        private Process? deviceTrackerProcess;
 
         public AdbService()
         {
@@ -48,6 +53,189 @@ namespace AdbExplorer.Services
             {
                 return false;
             }
+        }
+
+        public event EventHandler? DevicesChanged;
+
+        public void StartDeviceTracking()
+        {
+            if (deviceTrackerTask != null && !deviceTrackerTask.IsCompleted)
+                return;
+
+            deviceTrackerCts?.Cancel();
+            deviceTrackerCts = new CancellationTokenSource();
+            Trace.WriteLine("ADB device tracker starting.");
+            deviceTrackerTask = Task.Run(() => TrackDevicesLoopAsync(deviceTrackerCts.Token));
+        }
+
+        public void StopDeviceTracking()
+        {
+            deviceTrackerCts?.Cancel();
+            deviceTrackerCts = null;
+
+            if (deviceTrackerProcess != null)
+            {
+                try
+                {
+                    if (!deviceTrackerProcess.HasExited)
+                    {
+                        deviceTrackerProcess.Kill();
+                    }
+                }
+                catch
+                {
+                    // Ignore cleanup failures
+                }
+                finally
+                {
+                    deviceTrackerProcess.Dispose();
+                    deviceTrackerProcess = null;
+                }
+            }
+
+            Trace.WriteLine("ADB device tracker stopped.");
+            deviceTrackerTask = null;
+        }
+
+        private async Task TrackDevicesLoopAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                Process? process = null;
+                try
+                {
+                    process = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = adbPath,
+                            Arguments = "track-devices",
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                            StandardOutputEncoding = Encoding.UTF8
+                        }
+                    };
+
+                    process.ErrorDataReceived += (s, args) =>
+                    {
+                        if (!string.IsNullOrEmpty(args.Data))
+                        {
+                            Trace.WriteLine($"ADB track-devices stderr: {args.Data}");
+                        }
+                    };
+
+                    deviceTrackerProcess = process;
+                    process.Start();
+                    process.BeginErrorReadLine();
+
+                    using var reader = process.StandardOutput;
+
+                    Trace.WriteLine("ADB device tracker triggered initial refresh.");
+                    RaiseDevicesChanged();
+
+                    while (!reader.EndOfStream && !token.IsCancellationRequested)
+                    {
+                        var line = await reader.ReadLineAsync().ConfigureAwait(false);
+                        if (line == null)
+                        {
+                            break;
+                        }
+
+                        Trace.WriteLine($"ADB track-devices output: '{line}'");
+
+                        // Skip "List of devices" header if present
+                        if (line.StartsWith("List of devices", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        // Skip blank lines
+                        if (string.IsNullOrWhiteSpace(line))
+                        {
+                            continue;
+                        }
+
+                        // Check if line starts with 4-character hex length prefix (e.g., "0017", "0030")
+                        // This indicates the start of a new device snapshot from adb track-devices
+                        if (line.Length >= 4 &&
+                            IsHexDigit(line[0]) && IsHexDigit(line[1]) &&
+                            IsHexDigit(line[2]) && IsHexDigit(line[3]))
+                        {
+                            Trace.WriteLine("ADB device tracker detected new snapshot (length prefix).");
+                            RaiseDevicesChanged();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Trace.WriteLine($"ADB device tracker error: {ex.Message}");
+                }
+                finally
+                {
+                    if (process != null)
+                    {
+                        try
+                        {
+                            if (!process.HasExited)
+                            {
+                                process.Kill();
+                            }
+                        }
+                        catch
+                        {
+                        }
+                        process.Dispose();
+                    }
+
+                    if (ReferenceEquals(deviceTrackerProcess, process))
+                    {
+                        deviceTrackerProcess = null;
+                    }
+                }
+
+                if (!token.IsCancellationRequested)
+                {
+                    Trace.WriteLine("ADB device tracker scheduling retry after exit.");
+                    RaiseDevicesChanged();
+                    try
+                    {
+                        await Task.Delay(1000, token).ConfigureAwait(false);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            Trace.WriteLine("ADB device tracker loop exited.");
+        }
+
+        private void RaiseDevicesChanged()
+        {
+            Trace.WriteLine("ADB device tracker noticed change.");
+            var handlers = DevicesChanged;
+            if (handlers == null)
+                return;
+
+            foreach (EventHandler handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    handler.Invoke(this, EventArgs.Empty);
+                }
+                catch (Exception ex)
+                {
+                    Trace.WriteLine($"ADB device change handler error: {ex.Message}");
+                }
+            }
+        }
+
+        private static bool IsHexDigit(char c)
+        {
+            return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
         }
 
         public void SetCurrentDevice(string deviceId)

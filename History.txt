@@ -1,6 +1,14 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.2.9 - 2025-10-13
+---------------------------
+- Fixed device combo box not updating when devices connect/disconnect:
+  * Device list now automatically refreshes when Android devices are connected or disconnected
+  * Fixed device tracking to properly detect adb track-devices protocol length prefixes
+  * Removed incorrect Items.Refresh() call that interfered with ObservableCollection binding
+  * Device combo box now correctly updates in real-time without manual refresh
+
 Version 1.2.8 - 2025-09-15
 ---------------------------
 - Fixed drag and drop functionality:
