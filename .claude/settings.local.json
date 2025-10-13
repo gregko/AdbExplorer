@@ -15,7 +15,16 @@
       "Bash(\"C:\\Program Files (x86)\\NSIS\\makensis.exe\" Installer.nsi)",
       "Bash(\"C:\\Program Files\\dotnet\\dotnet.exe\" clean)",
       "Bash(\"C:\\Program Files (x86)\\NSIS\\makensis.exe\" Installer.nsi)",
-      "Bash(\"C:\\Program Files (x86)\\NSIS\\makensis.exe\" Installer.nsi)"
+      "Bash(\"C:\\Program Files (x86)\\NSIS\\makensis.exe\" Installer.nsi)",
+      "Bash(cmd.exe /c \"cd /d C:\\src3\\AdbExplorer\\AdbExplorer && \"\"C:\\Program Files\\dotnet\\dotnet.exe\"\" clean\")",
+      "Bash(cmd.exe:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git config:*)",
+      "Bash(git remote get-url:*)",
+      "Bash(git log:*)",
+      "Bash(git push:*)",
+      "Bash(gh auth:*)"
     ],
     "deny": [],
     "ask": []
