@@ -1,0 +1,314 @@
+<UserControl x:Class="AdbExplorer.Controls.FileTransferProgressPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="400" d:DesignWidth="600"
+             Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+             BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+             BorderThickness="1">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header with overall progress -->
+        <Border Grid.Row="0" Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"
+                BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                BorderThickness="0,0,0,1" Padding="10,8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Title and percentage -->
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Name="OperationTitle"
+                               Text="Uploading" FontWeight="SemiBold"
+                               FontSize="14" VerticalAlignment="Center"/>
+
+                    <TextBlock Grid.Column="2" Name="OverallPercentage"
+                               Text="0.0%" FontWeight="Bold"
+                               FontSize="14" VerticalAlignment="Center"/>
+                </Grid>
+
+                <!-- Overall progress bar -->
+                <ProgressBar Grid.Row="1" Name="OverallProgressBar"
+                            Height="20" Margin="0,5,0,5"
+                            Minimum="0" Maximum="100" Value="0"/>
+
+                <!-- Statistics -->
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Name="FileCountText"
+                               Text="Files: 0 / 0" Margin="0,0,10,0"/>
+
+                    <TextBlock Grid.Column="1" Name="SizeProgressText"
+                               Text="Size: 0 B / 0 B" Margin="0,0,10,0"/>
+
+                    <TextBlock Grid.Column="2" Name="SpeedText"
+                               Text="Speed: 0 KB/s" Margin="0,0,10,0"/>
+
+                    <TextBlock Grid.Column="3" Name="ETAText"
+                               Text="ETA: --:--" FontWeight="SemiBold"/>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- Current file progress -->
+        <Border Grid.Row="1" Padding="10,8"
+                BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Current file label and name -->
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Text="Current:"
+                               Margin="0,0,5,0" VerticalAlignment="Center"/>
+
+                    <TextBlock Grid.Column="1" Name="CurrentFileName"
+                               Text="" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"/>
+
+                    <TextBlock Grid.Column="2" Name="CurrentFileProgress"
+                               Text="0%" Margin="5,0,0,0"
+                               VerticalAlignment="Center"/>
+                </Grid>
+
+                <!-- Current file progress bar -->
+                <ProgressBar Grid.Row="1" Name="CurrentFileProgressBar"
+                            Height="18" Margin="0,5,0,3"
+                            Minimum="0" Maximum="100" Value="0"/>
+
+                <!-- Source and destination paths -->
+                <Grid Grid.Row="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Name="SourcePathText"
+                               Text="" FontSize="11" Foreground="Gray"
+                               TextTrimming="CharacterEllipsis"/>
+
+                    <TextBlock Grid.Row="1" Name="DestinationPathText"
+                               Text="" FontSize="11" Foreground="Gray"
+                               TextTrimming="CharacterEllipsis"/>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- File list -->
+        <DataGrid Grid.Row="2" Name="FileListGrid"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  CanUserReorderColumns="False"
+                  CanUserSortColumns="True"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  SelectionMode="Single"
+                  IsReadOnly="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  ScrollViewer.CanContentScroll="True"
+                  Background="White">
+
+            <DataGrid.Resources>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Status}" Value="Error">
+                            <Setter Property="Background" Value="#FFEEEE"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Status}" Value="Completed">
+                            <Setter Property="Background" Value="#EEFFEE"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Status}" Value="InProgress">
+                            <Setter Property="Background" Value="#FFFFEE"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Status}" Value="Skipped">
+                            <Setter Property="Background" Value="#F0F0F0"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.Resources>
+
+            <DataGrid.Columns>
+                <!-- Status icon column -->
+                <DataGridTemplateColumn Header="" Width="30" CanUserResize="False">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Status}" Value="Pending">
+                                                <Setter Property="Text" Value="⏸"/>
+                                                <Setter Property="Foreground" Value="Gray"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="InProgress">
+                                                <Setter Property="Text" Value="▶"/>
+                                                <Setter Property="Foreground" Value="Blue"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="Completed">
+                                                <Setter Property="Text" Value="✓"/>
+                                                <Setter Property="Foreground" Value="Green"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="Error">
+                                                <Setter Property="Text" Value="✗"/>
+                                                <Setter Property="Foreground" Value="Red"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="Skipped">
+                                                <Setter Property="Text" Value="⊘"/>
+                                                <Setter Property="Foreground" Value="Gray"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- File name column -->
+                <DataGridTextColumn Header="File Name"
+                                    Binding="{Binding FileName}"
+                                    Width="2*">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            <Setter Property="ToolTip" Value="{Binding SourcePath}"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+
+                <!-- Size column -->
+                <DataGridTemplateColumn Header="Size" Width="80">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding TotalSize, Converter={StaticResource FileSizeConverter}}"
+                                       HorizontalAlignment="Right"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Progress column -->
+                <DataGridTextColumn Header="Progress"
+                                    Binding="{Binding FormattedProgress}"
+                                    Width="80">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="HorizontalAlignment" Value="Center"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+
+                <!-- Speed column -->
+                <DataGridTextColumn Header="Speed"
+                                    Binding="{Binding FormattedSpeed}"
+                                    Width="80">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="HorizontalAlignment" Value="Right"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+
+                <!-- Error message column (only shown when there are errors) -->
+                <DataGridTextColumn Header="Error"
+                                    Binding="{Binding ErrorMessage}"
+                                    Width="*"
+                                    Visibility="Collapsed">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            <Setter Property="ToolTip" Value="{Binding ErrorMessage}"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Control buttons -->
+        <Border Grid.Row="3" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                BorderThickness="0,1,0,0" Padding="10,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left side - action buttons -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Button Name="SkipButton" Content="Skip"
+                            Width="75" Height="25" Margin="0,0,5,0"
+                            ToolTip="Skip the current file"/>
+
+                    <Button Name="PauseResumeButton" Content="Pause"
+                            Width="75" Height="25" Margin="0,0,5,0"
+                            ToolTip="Pause/Resume the transfer"/>
+
+                    <Button Name="StopButton" Content="Stop"
+                            Width="75" Height="25"
+                            ToolTip="Stop all transfers"/>
+                </StackPanel>
+
+                <!-- Center - status or error summary -->
+                <TextBlock Grid.Column="1" Name="StatusMessage"
+                           Text="" VerticalAlignment="Center"
+                           Margin="10,0" TextTrimming="CharacterEllipsis"/>
+
+                <!-- Right side - options -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <CheckBox Name="VerifyCheckBox" Content="Verify"
+                              VerticalAlignment="Center" Margin="0,0,10,0"
+                              ToolTip="Verify files after transfer"
+                              Visibility="Collapsed"/>
+
+                    <ComboBox Name="OnFinishComboBox" Width="140"
+                              VerticalAlignment="Center" Margin="0,0,10,0"
+                              ToolTip="Action to perform when finished">
+                        <ComboBoxItem Content="Keep panel open" IsSelected="True"/>
+                        <ComboBoxItem Content="Close panel"/>
+                        <ComboBoxItem Content="Close if no errors"/>
+                    </ComboBox>
+
+                    <Button Name="CloseButton" Content="Close"
+                            Width="75" Height="25"
+                            ToolTip="Close the progress panel"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

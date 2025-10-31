@@ -24,7 +24,9 @@
       "Bash(git remote get-url:*)",
       "Bash(git log:*)",
       "Bash(git push:*)",
-      "Bash(gh auth:*)"
+      "Bash(gh auth:*)",
+      "Bash(find:*)",
+      "Bash(awk:*)"
     ],
     "deny": [],
     "ask": []

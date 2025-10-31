@@ -450,5 +450,208 @@ namespace AdbExplorer.Services
                 // Ignore permission errors
             }
         }
+
+        // Enhanced file transfer methods with progress tracking
+        public bool PullFileWithProgress(string remotePath, string localPath, IProgress<long> progress, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrEmpty(currentDeviceId))
+                throw new InvalidOperationException("No device selected");
+
+            try
+            {
+                // Ensure the local directory exists
+                string? localDir = System.IO.Path.GetDirectoryName(localPath);
+                if (!string.IsNullOrEmpty(localDir) && !System.IO.Directory.Exists(localDir))
+                {
+                    System.IO.Directory.CreateDirectory(localDir);
+                }
+
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = adbPath,
+                        Arguments = $"-s {currentDeviceId} pull \"{remotePath}\" \"{localPath}\"",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        StandardOutputEncoding = Encoding.UTF8
+                    }
+                };
+
+                process.Start();
+
+                // Start a task to monitor file size for progress
+                Task progressTask = Task.Run(async () =>
+                {
+                    var fileInfo = new System.IO.FileInfo(localPath);
+                    while (!process.HasExited && !cancellationToken.IsCancellationRequested)
+                    {
+                        if (fileInfo.Exists)
+                        {
+                            fileInfo.Refresh();
+                            progress?.Report(fileInfo.Length);
+                        }
+                        await Task.Delay(100, cancellationToken);
+                    }
+                });
+
+                // Read output and error streams
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    try { process.Kill(); } catch { }
+                    return false;
+                }
+
+                process.WaitForExit();
+                progressTask.Wait(1000); // Wait for progress task to complete
+
+                // Report final size if successful
+                if (process.ExitCode == 0 && System.IO.File.Exists(localPath))
+                {
+                    var finalInfo = new System.IO.FileInfo(localPath);
+                    progress?.Report(finalInfo.Length);
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception pulling file with progress {remotePath}: {ex.Message}");
+                throw;
+            }
+        }
+
+        public bool PushFileWithProgress(string localPath, string remotePath, IProgress<long> progress, CancellationToken cancellationToken)
+        {
+            return PushFileWithProgress(localPath, remotePath, progress, cancellationToken, true);
+        }
+
+        public bool PushFileWithProgress(string localPath, string remotePath, IProgress<long> progress, CancellationToken cancellationToken, bool setPermissions)
+        {
+            if (string.IsNullOrEmpty(currentDeviceId))
+                throw new InvalidOperationException("No device selected");
+
+            if (!System.IO.File.Exists(localPath) && !System.IO.Directory.Exists(localPath))
+                throw new System.IO.FileNotFoundException($"Local file not found: {localPath}");
+
+            try
+            {
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = adbPath,
+                        Arguments = $"-s {currentDeviceId} push \"{localPath}\" \"{remotePath}\"",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        StandardOutputEncoding = Encoding.UTF8
+                    }
+                };
+
+                // Get source file size
+                long totalSize = 0;
+                if (System.IO.File.Exists(localPath))
+                {
+                    var fileInfo = new System.IO.FileInfo(localPath);
+                    totalSize = fileInfo.Length;
+                }
+                else if (System.IO.Directory.Exists(localPath))
+                {
+                    totalSize = GetDirectorySize(new System.IO.DirectoryInfo(localPath));
+                }
+
+                process.Start();
+
+                // Parse progress from adb output
+                Task progressTask = Task.Run(async () =>
+                {
+                    string line;
+                    var reader = process.StandardOutput;
+                    while ((line = await reader.ReadLineAsync()) != null && !cancellationToken.IsCancellationRequested)
+                    {
+                        // ADB push output format: "[percentage]% [transferred]/[total]"
+                        // Example: "[ 45%] /data/local/tmp/file.txt"
+                        if (line.Contains("%"))
+                        {
+                            var match = System.Text.RegularExpressions.Regex.Match(line, @"\[\s*(\d+)%\]");
+                            if (match.Success && int.TryParse(match.Groups[1].Value, out int percentage))
+                            {
+                                long bytesTransferred = (totalSize * percentage) / 100;
+                                progress?.Report(bytesTransferred);
+                            }
+                        }
+                    }
+                });
+
+                string error = process.StandardError.ReadToEnd();
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    try { process.Kill(); } catch { }
+                    return false;
+                }
+
+                process.WaitForExit();
+                progressTask.Wait(1000);
+
+                // Check if push actually failed
+                bool isRealError = process.ExitCode != 0 &&
+                                  !string.IsNullOrEmpty(error) &&
+                                  !error.Contains("Warning") &&
+                                  !error.Contains("1 file pushed") &&
+                                  !error.Contains("fchown failed");
+
+                if (isRealError)
+                {
+                    return false;
+                }
+
+                // Report completion
+                progress?.Report(totalSize);
+
+                // Set permissions after pushing the file
+                if (setPermissions)
+                {
+                    try
+                    {
+                        ExecuteShellCommand($"chmod 660 \"{remotePath}\"");
+                    }
+                    catch { }
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception pushing file with progress {localPath}: {ex.Message}");
+                throw;
+            }
+        }
+
+        private long GetDirectorySize(System.IO.DirectoryInfo directory)
+        {
+            try
+            {
+                long size = 0;
+                var files = directory.GetFiles("*", System.IO.SearchOption.AllDirectories);
+                foreach (var file in files)
+                {
+                    size += file.Length;
+                }
+                return size;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
     }
 }

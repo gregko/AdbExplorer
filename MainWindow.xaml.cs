@@ -27,6 +27,7 @@ namespace AdbExplorer
 
         private AdbService adbService;
         private FileSystemService fileSystemService;
+        private FileTransferManager fileTransferManager;
         private ObservableCollection<AndroidDevice> devices;
         private ObservableCollection<FileItem> currentFiles;
         private ObservableCollection<FolderNode> rootFolders;
@@ -72,6 +73,8 @@ namespace AdbExplorer
             this.PreviewKeyDown += Window_PreviewKeyDown;
             // Set initial focus to file list for keyboard navigation
             this.Loaded += (s, e) => FileListView.Focus();
+            // Clean up temp files when window closes
+            this.Closing += (s, e) => CleanupTempFiles();
         }
 
         // New method for opening new windows
@@ -210,6 +213,16 @@ namespace AdbExplorer
                 }
             }
 
+            // Shift+Insert - Paste (alternative shortcut)
+            if (e.Key == Key.Insert && (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
+            {
+                if (FileListView.IsKeyboardFocusWithin)
+                {
+                    e.Handled = true;
+                    await PasteItems();
+                }
+            }
+
             // Ctrl+N - New Folder
             if (e.Key == Key.N && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
             {
@@ -303,6 +316,7 @@ namespace AdbExplorer
             adbService.DevicesChanged += AdbService_DevicesChanged;
             adbService.StartDeviceTracking();
             fileSystemService = new FileSystemService(adbService);
+            fileTransferManager = new FileTransferManager(adbService, fileSystemService, this);
             devices = new ObservableCollection<AndroidDevice>();
             currentFiles = new ObservableCollection<FileItem>();
             rootFolders = new ObservableCollection<FolderNode>();
@@ -886,11 +900,52 @@ namespace AdbExplorer
             {
                 dragStartPoint = e.GetPosition(null);
                 isDragging = false;
+
+                // IMPORTANT: Preserve multi-selection during drag operations
+                // If the clicked item is already selected, don't let the click clear the selection
+                // But allow double-clicks to work (they need the event to not be handled)
+                if (item.IsSelected && e.ClickCount == 1)
+                {
+                    // Prevent the selection from being cleared when starting a drag
+                    // Only for single clicks - double clicks need to go through
+                    e.Handled = true;
+                }
+                // If Ctrl or Shift is held, let the default multi-select behavior work
+                else if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == 0)
+                {
+                    // If no modifier keys and clicking on unselected item, this will select only that item
+                    // This is the expected behavior
+                }
             }
             else
             {
                 dragStartPoint = new Point(-1, -1); // Invalid point
             }
+        }
+
+        private void FileListView_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            // If we handled the mouse down to preserve selection, we might need to handle selection change here
+            var hitTest = e.OriginalSource as DependencyObject;
+            var item = FindAncestor<ListViewItem>(hitTest);
+
+            // If clicking on a selected item without dragging and no modifier keys are pressed
+            if (item != null && item.IsSelected && !isDragging &&
+                (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == 0)
+            {
+                // If this was the only selected item, do nothing
+                // If multiple items were selected, select only this item (deselect others)
+                if (FileListView.SelectedItems.Count > 1)
+                {
+                    // Clear other selections and keep only this item selected
+                    FileListView.SelectedItems.Clear();
+                    item.IsSelected = true;
+                }
+            }
+
+            // Reset drag state
+            dragStartPoint = new Point(-1, -1);
+            isDragging = false;
         }
 
         private async void FileListView_PreviewMouseMove(object sender, MouseEventArgs e)
@@ -975,67 +1030,94 @@ namespace AdbExplorer
 
         private async Task StartDragDropOperation(List<FileItem> selectedItems)
         {
+            // Change cursor to wait immediately to show something is happening
+            Mouse.OverrideCursor = Cursors.Wait;
+
             StatusText.Text = "Preparing files for drag...";
 
             string dragTempDir = Path.Combine(Path.GetTempPath(), "AdbExplorer", "DragDrop", Guid.NewGuid().ToString());
             Directory.CreateDirectory(dragTempDir);
 
             var filesToDrag = new System.Collections.Specialized.StringCollection();
-            var successCount = 0;
-            var failCount = 0;
 
-            await Task.Run(async () =>
+            // Collect all files to download
+            var downloadList = new List<(string remotePath, string localPath)>();
+            foreach (var item in selectedItems)
             {
-                int fileCount = 0;
-                int totalFiles = selectedItems.Count(f => !f.IsDirectory);
-
-                foreach (var item in selectedItems)
+                if (item.IsDirectory)
                 {
-                    try
+                    // For directories, collect all files recursively
+                    CollectDirectoryFilesForDragDownload(item.FullPath, Path.Combine(dragTempDir, item.Name), downloadList);
+                }
+                else
+                {
+                    string localPath = Path.Combine(dragTempDir, item.Name);
+                    downloadList.Add((item.FullPath, localPath));
+                }
+            }
+
+            bool success = false;
+
+            // For large batches, show progress panel during preparation
+            if (downloadList.Count >= 4)
+            {
+                StatusText.Text = $"Preparing {downloadList.Count} files for drag...";
+
+                // Show progress panel for the download preparation
+                success = await fileTransferManager.DownloadFilesAsync(downloadList, true);
+
+                // Add successfully downloaded files to drag collection
+                foreach (var (remotePath, localPath) in downloadList)
+                {
+                    if (File.Exists(localPath) || Directory.Exists(localPath))
                     {
-                        if (item.IsDirectory)
-                        {
-                            await Dispatcher.InvokeAsync(() =>
-                                StatusText.Text = $"Preparing directory: {item.Name}");
-
-                            string localDir = Path.Combine(dragTempDir, item.Name);
-                            Directory.CreateDirectory(localDir);
-
-                            await PullDirectoryContents(item.FullPath, localDir);
-                            filesToDrag.Add(localDir);
-                            successCount++;
-                        }
-                        else
+                        filesToDrag.Add(localPath);
+                    }
+                }
+            }
+            else
+            {
+                // For small batches, use quick download without progress panel
+                await Task.Run(async () =>
+                {
+                    int fileCount = 0;
+                    foreach (var (remotePath, localPath) in downloadList)
+                    {
+                        try
                         {
                             fileCount++;
                             await Dispatcher.InvokeAsync(() =>
-                                StatusText.Text = $"Preparing file {fileCount}/{totalFiles}: {item.Name}");
+                                StatusText.Text = $"Preparing file {fileCount}/{downloadList.Count}: {Path.GetFileName(remotePath)}");
 
-                            string tempFile = Path.Combine(dragTempDir, item.Name);
-                            fileSystemService.PullFile(item.FullPath, tempFile);
-
-                            if (File.Exists(tempFile))
+                            // Create directory if needed
+                            string localDir = Path.GetDirectoryName(localPath);
+                            if (!string.IsNullOrEmpty(localDir) && !Directory.Exists(localDir))
                             {
-                                filesToDrag.Add(tempFile);
-                                successCount++;
+                                Directory.CreateDirectory(localDir);
                             }
-                            else
+
+                            fileSystemService.PullFile(remotePath, localPath);
+
+                            if (File.Exists(localPath))
                             {
-                                failCount++;
+                                filesToDrag.Add(localPath);
                             }
                         }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to pull {remotePath}: {ex.Message}");
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        failCount++;
-                        System.Diagnostics.Debug.WriteLine($"Failed to pull {item.Name}: {ex.Message}");
-                    }
-                }
-            });
+                });
+                success = filesToDrag.Count > 0;
+            }
+
+            // Restore normal cursor before starting drag
+            Mouse.OverrideCursor = null;
 
             if (filesToDrag.Count > 0)
             {
-                StatusText.Text = $"Dragging {successCount} item(s)...";
+                StatusText.Text = $"Dragging {filesToDrag.Count} item(s)...";
 
                 var dragData = new DataObject();
                 dragData.SetData("AdbFiles", selectedItems);
@@ -1043,8 +1125,10 @@ namespace AdbExplorer
                 dragData.SetData("TempDragPath", dragTempDir);
                 dragData.SetData("SourceWindowId", this.windowId);
 
+                // This starts the actual drag operation - the cursor will change and Windows will handle the drop
                 var result = DragDrop.DoDragDrop(FileListView, dragData, DragDropEffects.Copy);
 
+                // Clean up temp files after drag completes
                 _ = Task.Run(() => CleanupDragTempFiles(dragTempDir));
                 StatusText.Text = "Ready";
             }
@@ -1059,6 +1143,36 @@ namespace AdbExplorer
                 catch { }
             }
         }
+
+        private void CollectDirectoryFilesForDragDownload(string remoteDir, string localDir, List<(string, string)> downloadList)
+        {
+            try
+            {
+                // Get files in remote directory
+                var files = fileSystemService.GetFiles(remoteDir);
+
+                foreach (var file in files)
+                {
+                    string localPath = Path.Combine(localDir, file.Name);
+
+                    if (file.IsDirectory)
+                    {
+                        // Recursively collect subdirectory files
+                        CollectDirectoryFilesForDragDownload(file.FullPath, localPath, downloadList);
+                    }
+                    else
+                    {
+                        downloadList.Add((file.FullPath, localPath));
+                    }
+                }
+            }
+            catch
+            {
+                // If we can't list directory contents, treat it as a single item
+                downloadList.Add((remoteDir, localDir));
+            }
+        }
+
 
         private async Task PullDirectoryContents(string remotePath, string localPath)
         {
@@ -1087,13 +1201,6 @@ namespace AdbExplorer
             }
         }
 
-        private void FileListView_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-        {
-            // Reset drag start point
-            dragStartPoint = new Point(-1, -1);
-
-            // Don't reset flags here as drag might still be in progress
-        }
 
         // Method to save the current tree expansion state
         private void SaveTreeExpansionState()
@@ -1389,7 +1496,7 @@ namespace AdbExplorer
                 this.Topmost = true;
                 this.Topmost = false; // Reset topmost to avoid staying on top permanently
 
-                string fileList = existingFiles.Count <= 5 
+                string fileList = existingFiles.Count <= 5
                     ? string.Join("\n", existingFiles)
                     : string.Join("\n", existingFiles.Take(5)) + $"\n... and {existingFiles.Count - 5} more";
 
@@ -1407,42 +1514,100 @@ namespace AdbExplorer
                 }
             }
 
-            StatusText.Text = $"Uploading {files.Length} item(s) to {targetPath}...";
+            // Prepare file list for upload
+            var uploadList = new List<(string localPath, string remotePath)>();
 
+            foreach (string file in files)
+            {
+                if (Directory.Exists(file))
+                {
+                    // Collect all files from directory recursively
+                    CollectDirectoryFiles(file, targetPath, uploadList);
+                }
+                else if (File.Exists(file))
+                {
+                    string destPath = targetPath == "/"
+                        ? "/" + Path.GetFileName(file)
+                        : targetPath + "/" + Path.GetFileName(file);
+                    uploadList.Add((file, destPath));
+                }
+            }
+
+            // Use FileTransferManager for batch operations (4+ files) or traditional method for smaller batches
+            bool success;
+            if (uploadList.Count >= 4)
+            {
+                success = await fileTransferManager.UploadFilesAsync(uploadList, true);
+            }
+            else
+            {
+                // Traditional upload for small batches
+                StatusText.Text = $"Uploading {files.Length} item(s) to {targetPath}...";
+                success = await UploadFilesTraditional(uploadList);
+            }
+
+            await RefreshCurrentFolder();
+
+            if (success)
+            {
+                StatusText.Text = $"Uploaded {uploadList.Count} item(s)";
+            }
+            else
+            {
+                StatusText.Text = $"Upload completed with some errors";
+            }
+        }
+
+        private void CollectDirectoryFiles(string localDir, string remoteDir, List<(string, string)> uploadList)
+        {
+            string dirName = Path.GetFileName(localDir);
+            string remoteDirPath = remoteDir == "/" ? "/" + dirName : remoteDir + "/" + dirName;
+
+            // Add all files in the directory
+            foreach (string file in Directory.GetFiles(localDir))
+            {
+                string remotePath = remoteDirPath + "/" + Path.GetFileName(file);
+                uploadList.Add((file, remotePath));
+            }
+
+            // Recursively add subdirectories
+            foreach (string subDir in Directory.GetDirectories(localDir))
+            {
+                CollectDirectoryFiles(subDir, remoteDirPath, uploadList);
+            }
+        }
+
+        private async Task<bool> UploadFilesTraditional(List<(string localPath, string remotePath)> files)
+        {
             int uploadedCount = 0;
             var errors = new List<string>();
             var uploadedFiles = new List<string>();
 
-            // First, upload all files without setting permissions
-            foreach (string file in files)
+            // Upload all files without setting permissions
+            foreach (var (localPath, remotePath) in files)
             {
                 try
                 {
-                    StatusText.Text = $"Uploading {Path.GetFileName(file)}...";
+                    StatusText.Text = $"Uploading {Path.GetFileName(localPath)}...";
 
-                    if (Directory.Exists(file))
+                    // Create directory if needed
+                    string remoteDir = Path.GetDirectoryName(remotePath)?.Replace('\\', '/');
+                    if (!string.IsNullOrEmpty(remoteDir))
                     {
-                        await UploadDirectory(file, targetPath);
-                        uploadedCount++;
+                        await Task.Run(() => fileSystemService.CreateFolder(remoteDir));
                     }
-                    else if (File.Exists(file))
-                    {
-                        string destPath = targetPath == "/"
-                            ? "/" + Path.GetFileName(file)
-                            : targetPath + "/" + Path.GetFileName(file);
 
-                        await Task.Run(() => fileSystemService.PushFile(file, destPath, false));
-                        uploadedFiles.Add(destPath);
-                        uploadedCount++;
-                    }
+                    await Task.Run(() => fileSystemService.PushFile(localPath, remotePath, false));
+                    uploadedFiles.Add(remotePath);
+                    uploadedCount++;
                 }
                 catch (Exception ex)
                 {
-                    errors.Add($"{Path.GetFileName(file)}: {ex.Message}");
+                    errors.Add($"{Path.GetFileName(localPath)}: {ex.Message}");
                 }
             }
 
-            // Now set permissions for all uploaded files in batch
+            // Set permissions for all uploaded files
             if (uploadedFiles.Count > 0)
             {
                 await Task.Run(() =>
@@ -1454,26 +1619,18 @@ namespace AdbExplorer
                 });
             }
 
-            await RefreshCurrentFolder();
-
-            if (errors.Count == 0)
+            if (errors.Count > 0)
             {
-                StatusText.Text = $"Uploaded {uploadedCount} item(s)";
-            }
-            else
-            {
-                StatusText.Text = $"Uploaded {uploadedCount} item(s), {errors.Count} error(s)";
-                if (errors.Count > 0)
-                {
-                    string errorMessage = "Some items could not be uploaded:\n\n" +
-                                         string.Join("\n", errors.Take(5));
-                    if (errors.Count > 5)
-                        errorMessage += $"\n... and {errors.Count - 5} more";
+                string errorMessage = "Some items could not be uploaded:\n\n" +
+                                     string.Join("\n", errors.Take(5));
+                if (errors.Count > 5)
+                    errorMessage += $"\n... and {errors.Count - 5} more";
 
-                    MessageBox.Show(errorMessage, "Upload Errors",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
+                MessageBox.Show(errorMessage, "Upload Errors",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+
+            return errors.Count == 0;
         }
 
         private async Task UploadDirectory(string localPath, string remotePath)
@@ -2278,15 +2435,41 @@ namespace AdbExplorer
             return "$'\\x" + hexPath + "'";
         }
 
-        private void CopyMenuItem_Click(object sender, RoutedEventArgs e)
+        private string currentClipboardTempDir = null;
+
+        private void CleanupTempFiles()
+        {
+            // Clean up clipboard temp files
+            if (!string.IsNullOrEmpty(currentClipboardTempDir))
+            {
+                try
+                {
+                    if (Directory.Exists(currentClipboardTempDir))
+                    {
+                        Directory.Delete(currentClipboardTempDir, true);
+                    }
+                }
+                catch
+                {
+                    // Best effort cleanup
+                }
+            }
+        }
+
+        private async void CopyMenuItem_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                // Implement copy functionality
+                // Implement enhanced copy functionality that works with Windows Explorer
                 var selectedItems = FileListView.SelectedItems.Cast<FileItem>().ToList();
                 if (selectedItems.Count > 0)
                 {
+                    // Always set AdbFiles for internal paste operations
                     Clipboard.SetData("AdbFiles", selectedItems);
+
+                    // For external paste (to Windows Explorer), prepare actual files
+                    await PrepareFilesForWindowsClipboard(selectedItems);
+
                     StatusText.Text = $"Copied {selectedItems.Count} item(s)";
                 }
             }
@@ -2298,11 +2481,166 @@ namespace AdbExplorer
             }
         }
 
+        private async Task PrepareFilesForWindowsClipboard(List<FileItem> selectedItems)
+        {
+            // Clean up previous clipboard temp files if any
+            if (!string.IsNullOrEmpty(currentClipboardTempDir))
+            {
+                _ = Task.Run(() => CleanupDragTempFiles(currentClipboardTempDir));
+            }
+
+            // Create new temp directory for clipboard files
+            currentClipboardTempDir = Path.Combine(Path.GetTempPath(), "AdbExplorer", "Clipboard", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(currentClipboardTempDir);
+
+            // Prepare download list
+            var downloadList = new List<(string remotePath, string localPath)>();
+            foreach (var item in selectedItems)
+            {
+                if (item.IsDirectory)
+                {
+                    CollectDirectoryFilesForDragDownload(item.FullPath, Path.Combine(currentClipboardTempDir, item.Name), downloadList);
+                }
+                else
+                {
+                    string localPath = Path.Combine(currentClipboardTempDir, item.Name);
+                    downloadList.Add((item.FullPath, localPath));
+                }
+            }
+
+            // For large batches, show progress panel
+            if (downloadList.Count >= 4)
+            {
+                StatusText.Text = $"Preparing {downloadList.Count} files for clipboard...";
+
+                // Show progress panel for the download
+                bool success = await fileTransferManager.DownloadFilesAsync(downloadList, true);
+
+                if (success)
+                {
+                    // Add files to Windows clipboard
+                    AddFilesToWindowsClipboard(currentClipboardTempDir);
+                    StatusText.Text = $"Copied {selectedItems.Count} item(s) - ready to paste";
+                }
+                else
+                {
+                    StatusText.Text = "Copy operation completed with some errors";
+                }
+            }
+            else
+            {
+                // For small batches, download quickly without progress panel
+                StatusText.Text = $"Preparing {selectedItems.Count} item(s) for clipboard...";
+
+                await Task.Run(async () =>
+                {
+                    foreach (var (remotePath, localPath) in downloadList)
+                    {
+                        try
+                        {
+                            // Create directory if needed
+                            string localDir = Path.GetDirectoryName(localPath);
+                            if (!string.IsNullOrEmpty(localDir) && !Directory.Exists(localDir))
+                            {
+                                Directory.CreateDirectory(localDir);
+                            }
+
+                            fileSystemService.PullFile(remotePath, localPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to pull {remotePath}: {ex.Message}");
+                        }
+                    }
+                });
+
+                // Add files to Windows clipboard
+                AddFilesToWindowsClipboard(currentClipboardTempDir);
+                StatusText.Text = $"Copied {selectedItems.Count} item(s) - ready to paste";
+            }
+        }
+
+        private void AddFilesToWindowsClipboard(string tempDir)
+        {
+            try
+            {
+                // Get all files and directories in temp folder
+                var files = new System.Collections.Specialized.StringCollection();
+
+                // Add files
+                foreach (string file in Directory.GetFiles(tempDir))
+                {
+                    files.Add(file);
+                }
+
+                // Add directories
+                foreach (string dir in Directory.GetDirectories(tempDir))
+                {
+                    files.Add(dir);
+                }
+
+                if (files.Count > 0)
+                {
+                    // Create new data object with both formats
+                    var dataObject = new DataObject();
+
+                    // Add file drop list for Windows Explorer
+                    dataObject.SetFileDropList(files);
+
+                    // Keep AdbFiles for internal use
+                    if (Clipboard.ContainsData("AdbFiles"))
+                    {
+                        dataObject.SetData("AdbFiles", Clipboard.GetData("AdbFiles"));
+                    }
+
+                    // Set the clipboard
+                    Clipboard.SetDataObject(dataObject, true);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error setting Windows clipboard: {ex.Message}");
+            }
+        }
+
         private async void PasteMenuItem_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                // Implement paste functionality with proper error handling for clipboard data
+                // Check for Windows files first (from Windows Explorer)
+                bool hasWindowsFiles = false;
+                try
+                {
+                    hasWindowsFiles = Clipboard.ContainsFileDropList();
+                }
+                catch (System.Runtime.InteropServices.COMException)
+                {
+                    // Clipboard access error, continue to check other formats
+                }
+
+                if (hasWindowsFiles)
+                {
+                    try
+                    {
+                        var fileDropList = Clipboard.GetFileDropList();
+                        if (fileDropList != null && fileDropList.Count > 0)
+                        {
+                            string[] files = new string[fileDropList.Count];
+                            fileDropList.CopyTo(files, 0);
+
+                            // Use the same handler as drag-and-drop from Windows Explorer
+                            await HandleExternalFileDrop(files, currentPath);
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        StatusText.Text = $"Failed to read Windows clipboard files: {ex.Message}";
+                        return;
+                    }
+                }
+
+                // Check for AdbFiles (internal AdbExplorer clipboard)
                 bool hasAdbFiles = false;
                 List<FileItem> items = null;
 
@@ -2338,50 +2676,48 @@ namespace AdbExplorer
 
                         if (result == MessageBoxResult.Yes)
                         {
+                            // Prepare copy list
+                            var copyList = new List<(string sourcePath, string destPath)>();
+
                             foreach (var file in items)
                             {
-                                try
+                                string destPath = currentPath == "/"
+                                    ? "/" + file.Name
+                                    : currentPath + "/" + file.Name;
+
+                                if (file.IsDirectory)
                                 {
-                                    StatusText.Text = $"Pasting {file.Name}...";
-                                    string destPath = currentPath + "/" + file.Name;
-
-                                    var sourceEscaped = EscapeForShell(file.FullPath);
-                                    var destEscaped = EscapeForShell(destPath);
-
-                                    await Task.Run(() =>
-                                    {
-                                        if (file.IsDirectory)
-                                        {
-                                            adbService.ExecuteShellCommand($"cp -r {sourceEscaped} {destEscaped}");
-                                            // Set permissions recursively for directories
-                                            try
-                                            {
-                                                adbService.ExecuteShellCommand($"chmod -R 770 {destEscaped}");
-                                                adbService.ExecuteShellCommand($"find {destEscaped} -type f -exec chmod 660 {{}} \\;");
-                                            }
-                                            catch { /* Ignore permission errors */ }
-                                        }
-                                        else
-                                        {
-                                            adbService.ExecuteShellCommand($"cp {sourceEscaped} {destEscaped}");
-                                            // Set permissions to 660 for copied file
-                                            try
-                                            {
-                                                adbService.ExecuteShellCommand($"chmod 660 {destEscaped}");
-                                            }
-                                            catch { /* Ignore permission errors */ }
-                                        }
-                                    });
+                                    // For directories, add as a single operation
+                                    copyList.Add((file.FullPath, destPath));
                                 }
-                                catch (Exception ex)
+                                else
                                 {
-                                    MessageBox.Show($"Error pasting {file.Name}: {ex.Message}", "Error",
-                                        MessageBoxButton.OK, MessageBoxImage.Error);
+                                    copyList.Add((file.FullPath, destPath));
                                 }
                             }
 
+                            // Use FileTransferManager for batch operations (4+ files) or traditional method for smaller batches
+                            bool success;
+                            if (copyList.Count >= 4)
+                            {
+                                success = await fileTransferManager.CopyFilesOnDeviceAsync(copyList, true);
+                            }
+                            else
+                            {
+                                // Traditional copy for small batches
+                                success = await PasteFilesTraditional(copyList);
+                            }
+
                             await RefreshCurrentFolder();
-                            StatusText.Text = "Paste completed";
+
+                            if (success)
+                            {
+                                StatusText.Text = $"Pasted {copyList.Count} item(s)";
+                            }
+                            else
+                            {
+                                StatusText.Text = "Paste completed with some errors";
+                            }
                         }
                         else
                         {
@@ -2400,6 +2736,69 @@ namespace AdbExplorer
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 StatusText.Text = "Paste operation failed";
             }
+        }
+
+        private async Task<bool> PasteFilesTraditional(List<(string sourcePath, string destPath)> files)
+        {
+            var errors = new List<string>();
+
+            foreach (var (sourcePath, destPath) in files)
+            {
+                try
+                {
+                    StatusText.Text = $"Pasting {Path.GetFileName(sourcePath)}...";
+
+                    var sourceEscaped = EscapeForShell(sourcePath);
+                    var destEscaped = EscapeForShell(destPath);
+
+                    // Check if source is directory
+                    var sourceFiles = await Task.Run(() => fileSystemService.GetFiles(Path.GetDirectoryName(sourcePath)));
+                    var sourceItem = sourceFiles?.FirstOrDefault(f => f.FullPath == sourcePath);
+                    bool isDirectory = sourceItem?.IsDirectory ?? false;
+
+                    await Task.Run(() =>
+                    {
+                        if (isDirectory)
+                        {
+                            adbService.ExecuteShellCommand($"cp -r {sourceEscaped} {destEscaped}");
+                            // Set permissions recursively for directories
+                            try
+                            {
+                                adbService.ExecuteShellCommand($"chmod -R 770 {destEscaped}");
+                                adbService.ExecuteShellCommand($"find {destEscaped} -type f -exec chmod 660 {{}} \\;");
+                            }
+                            catch { /* Ignore permission errors */ }
+                        }
+                        else
+                        {
+                            adbService.ExecuteShellCommand($"cp {sourceEscaped} {destEscaped}");
+                            // Set permissions to 660 for copied file
+                            try
+                            {
+                                adbService.ExecuteShellCommand($"chmod 660 {destEscaped}");
+                            }
+                            catch { /* Ignore permission errors */ }
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{Path.GetFileName(sourcePath)}: {ex.Message}");
+                }
+            }
+
+            if (errors.Count > 0)
+            {
+                string errorMessage = "Some items could not be pasted:\n\n" +
+                                     string.Join("\n", errors.Take(5));
+                if (errors.Count > 5)
+                    errorMessage += $"\n... and {errors.Count - 5} more";
+
+                MessageBox.Show(errorMessage, "Paste Errors",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+
+            return errors.Count == 0;
         }
 
         private void PropertiesMenuItem_Click(object sender, RoutedEventArgs e)
@@ -2968,12 +3367,17 @@ namespace AdbExplorer
             helpDialog.ShowDialog();
         }
 
-        private void CopySelectedItems()
+        private async void CopySelectedItems()
         {
             var selectedItems = FileListView.SelectedItems.Cast<FileItem>().ToList();
             if (selectedItems.Count > 0)
             {
+                // Always set AdbFiles for internal paste operations
                 Clipboard.SetData("AdbFiles", selectedItems);
+
+                // For external paste (to Windows Explorer), prepare actual files
+                await PrepareFilesForWindowsClipboard(selectedItems);
+
                 StatusText.Text = $"Copied {selectedItems.Count} item(s)";
             }
         }
@@ -2981,6 +3385,40 @@ namespace AdbExplorer
         // Add helper method for Paste operation
         private async Task PasteItems()
         {
+            // Check for Windows files first (from Windows Explorer)
+            bool hasWindowsFiles = false;
+            try
+            {
+                hasWindowsFiles = Clipboard.ContainsFileDropList();
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                // Clipboard access error, continue to check other formats
+            }
+
+            if (hasWindowsFiles)
+            {
+                try
+                {
+                    var fileDropList = Clipboard.GetFileDropList();
+                    if (fileDropList != null && fileDropList.Count > 0)
+                    {
+                        string[] files = new string[fileDropList.Count];
+                        fileDropList.CopyTo(files, 0);
+
+                        // Use the same handler as drag-and-drop from Windows Explorer
+                        await HandleExternalFileDrop(files, currentPath);
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    StatusText.Text = $"Failed to read Windows clipboard files: {ex.Message}";
+                    return;
+                }
+            }
+
+            // Check for internal AdbFiles
             if (Clipboard.ContainsData("AdbFiles"))
             {
                 var items = Clipboard.GetData("AdbFiles") as List<FileItem>;

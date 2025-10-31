@@ -1,6 +1,26 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.3.0 - 2025-10-31
+---------------------------
+- Added progress panel for batch file operations.
+- Fixed double-click functionality for files and folders:
+  * Double-clicking now works correctly even when multiple files are selected
+  * Selection preservation logic now only applies to single clicks, not double-clicks
+- Added paste support from Windows Explorer:
+  * Files copied in Windows Explorer can now be pasted into ADB Explorer
+  * Added support via Ctrl+V keyboard shortcut
+  * Added support via Shift+Insert keyboard shortcut
+  * Added support via right-click context menu → Paste
+  * Uses same file transfer logic as drag-and-drop for consistency
+- Fixed keyboard shortcuts becoming unresponsive:
+  * Keyboard shortcuts (Ctrl+V, Ctrl+A, Shift+Insert, etc.) now continue working after closing progress panel
+  * Focus is automatically restored to file list when progress panel is dismissed
+- Fixed progress panel issues with multiple operations:
+  * Progress panel Close button now works reliably even when starting new operations without dismissing previous panel
+  * Progress panel is now properly reused for subsequent operations instead of creating duplicate overlays
+  * Eliminated stacking of multiple progress panels that prevented interaction
+
 Version 1.2.9 - 2025-10-13
 ---------------------------
 - Fixed device combo box not updating when devices connect/disconnect:
