@@ -1,6 +1,19 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.3.1 - 2025-11-01
+---------------------------
+- Fixed Ctrl+C keyboard shortcut not working:
+  * Updated focus detection to check both IsFocused and IsKeyboardFocusWithin
+  * Also fixed Ctrl+V and Shift+Insert shortcuts for consistency
+- Fixed duplicate Root(/) entries appearing in directory tree:
+  * Added guard flag to prevent concurrent execution of LoadRootFolders()
+  * Eliminated race condition that could cause multiple root nodes
+- Added path segment navigation feature:
+  * Double-clicking on path segments in the Path textbox now navigates to that directory
+  * Example: In "/sdcard/Android/data", double-click "Android" to go to "/sdcard/Android"
+  * Navigation history (Back/Forward buttons) works with this feature
+
 Version 1.3.0 - 2025-10-31
 ---------------------------
 - Added progress panel for batch file operations.

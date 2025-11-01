@@ -51,6 +51,7 @@ namespace AdbExplorer
         private string? activeDeviceId;
         private bool isDeviceRefreshInProgress;
         private bool pendingDeviceRefresh;
+        private bool isLoadingRootFolders = false;
 
         // Keep the parameterless constructor for XAML
         public MainWindow() : this(null, null)
@@ -196,7 +197,8 @@ namespace AdbExplorer
             // Ctrl+C - Copy
             if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
             {
-                if (FileListView.SelectedItems.Count > 0 && FileListView.IsKeyboardFocusWithin)
+                if (FileListView.SelectedItems.Count > 0 &&
+                    (FileListView.IsFocused || FileListView.IsKeyboardFocusWithin))
                 {
                     e.Handled = true;
                     CopySelectedItems();
@@ -206,7 +208,7 @@ namespace AdbExplorer
             // Ctrl+V - Paste
             if (e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
             {
-                if (FileListView.IsKeyboardFocusWithin)
+                if (FileListView.IsFocused || FileListView.IsKeyboardFocusWithin)
                 {
                     e.Handled = true;
                     await PasteItems();
@@ -216,7 +218,7 @@ namespace AdbExplorer
             // Shift+Insert - Paste (alternative shortcut)
             if (e.Key == Key.Insert && (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
             {
-                if (FileListView.IsKeyboardFocusWithin)
+                if (FileListView.IsFocused || FileListView.IsKeyboardFocusWithin)
                 {
                     e.Handled = true;
                     await PasteItems();
@@ -730,6 +732,13 @@ namespace AdbExplorer
 
         private async Task LoadRootFolders()
         {
+            if (isLoadingRootFolders)
+            {
+                System.Diagnostics.Debug.WriteLine("LoadRootFolders already in progress, skipping");
+                return;
+            }
+
+            isLoadingRootFolders = true;
             try
             {
                 rootFolders.Clear();
@@ -740,6 +749,10 @@ namespace AdbExplorer
             {
                 MessageBox.Show($"Error loading folders: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                isLoadingRootFolders = false;
             }
         }
 
@@ -2053,6 +2066,92 @@ namespace AdbExplorer
                 navigationHistory.Push(currentPath);
                 navigationForward.Clear();
                 await NavigateToPath(PathTextBox.Text);
+            }
+        }
+
+        private async void PathTextBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                if (sender is not TextBox textBox)
+                    return;
+
+                // Get the character index at the mouse position
+                int charIndex = textBox.GetCharacterIndexFromPoint(e.GetPosition(textBox), true);
+                if (charIndex < 0 || charIndex >= textBox.Text.Length)
+                    return;
+
+                string fullPath = textBox.Text;
+                if (string.IsNullOrEmpty(fullPath))
+                    return;
+
+                // Split the path by '/' separator
+                var segments = fullPath.Split('/');
+
+                // Calculate which segment was clicked
+                int currentPos = 0;
+                string targetPath = "";
+
+                for (int i = 0; i < segments.Length; i++)
+                {
+                    string segment = segments[i];
+                    int segmentStart = currentPos;
+                    int segmentEnd = currentPos + segment.Length;
+
+                    // Check if the click was within this segment
+                    if (charIndex >= segmentStart && charIndex < segmentEnd && !string.IsNullOrEmpty(segment))
+                    {
+                        // Build the target path up to and including this segment
+                        if (i == 0 && segment == "")
+                        {
+                            // Root segment
+                            targetPath = "/";
+                        }
+                        else
+                        {
+                            // Build path from beginning up to this segment
+                            for (int j = 0; j <= i; j++)
+                            {
+                                if (j == 0 && segments[j] == "")
+                                {
+                                    targetPath = "/";
+                                }
+                                else if (j == 0)
+                                {
+                                    targetPath = segments[j];
+                                }
+                                else
+                                {
+                                    // If targetPath is "/", don't add another slash
+                                    if (targetPath == "/")
+                                    {
+                                        targetPath += segments[j];
+                                    }
+                                    else
+                                    {
+                                        targetPath += "/" + segments[j];
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+
+                    // Move to next segment (including the separator)
+                    currentPos += segment.Length + 1; // +1 for the '/' separator
+                }
+
+                // Navigate to the target path if we found one
+                if (!string.IsNullOrEmpty(targetPath) && targetPath != currentPath)
+                {
+                    navigationHistory.Push(currentPath);
+                    navigationForward.Clear();
+                    await NavigateToPath(targetPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error handling path double-click: {ex.Message}");
             }
         }
 

@@ -113,9 +113,10 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Label Grid.Column="0" Content="Path:" VerticalAlignment="Center" Margin="5,0"/>
-            <TextBox Grid.Column="1" Name="PathTextBox" 
+            <TextBox Grid.Column="1" Name="PathTextBox"
                      VerticalAlignment="Center" Margin="5,0"
-                     KeyDown="PathTextBox_KeyDown"/>
+                     KeyDown="PathTextBox_KeyDown"
+                     MouseDoubleClick="PathTextBox_MouseDoubleClick"/>
             <Button Grid.Column="2" Content="Go" Width="40" Margin="5,0"
                     Click="GoButton_Click"/>
         </Grid>
