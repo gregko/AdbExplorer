@@ -26,7 +26,10 @@
       "Bash(git push:*)",
       "Bash(gh auth:*)",
       "Bash(find:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(curl:*)",
+      "Bash(https://api.github.com/repos/gregko/AdbExplorer/releases )",
+      "Bash(\"https://uploads.github.com/repos/gregko/AdbExplorer/releases/259005753/assets?name=AdbExplorer_Setup.exe\")"
     ],
     "deny": [],
     "ask": []
