@@ -144,7 +144,8 @@ namespace AdbExplorer.Services
                                 Owner = "?",
                                 Group = "?",
                                 IsDirectory = true, // Assume directory for inaccessible items
-                                IsAccessible = false // Mark as not accessible
+                                IsAccessible = false, // Mark as not accessible
+                                Type = "" // Directories have no type
                             };
                         }
                     }
@@ -224,6 +225,17 @@ namespace AdbExplorer.Services
                 bool isDirectory = permissions.StartsWith("d") ||
                                   (permissions.StartsWith("l") && IsSymlinkDirectory(fullPath));
 
+                // Extract file extension (without dot) for Type property
+                string fileType = "";
+                if (!isDirectory && name.Contains('.'))
+                {
+                    var lastDotIndex = name.LastIndexOf('.');
+                    if (lastDotIndex > 0 && lastDotIndex < name.Length - 1)
+                    {
+                        fileType = name.Substring(lastDotIndex + 1).ToLowerInvariant();
+                    }
+                }
+
                 return new FileItem
                 {
                     Name = name,
@@ -235,7 +247,8 @@ namespace AdbExplorer.Services
                     Group = group,
                     IsDirectory = isDirectory,
                     IsAccessible = !permissions.Contains("?"),
-                    FileType = permissions.StartsWith("l") ? "symlink" : ""
+                    FileType = permissions.StartsWith("l") ? "symlink" : "",
+                    Type = fileType
                 };
             }
             catch (Exception ex)

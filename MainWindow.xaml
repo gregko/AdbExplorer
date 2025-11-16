@@ -176,6 +176,12 @@
                                       AllowDrop="True">
                 <ListView.View>
                     <GridView>
+                        <GridView.ColumnHeaderContainerStyle>
+                            <Style TargetType="GridViewColumnHeader">
+                                <EventSetter Event="Click" Handler="GridViewColumnHeader_Click"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                            </Style>
+                        </GridView.ColumnHeaderContainerStyle>
                         <GridViewColumn Header="Name" Width="300">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
@@ -192,6 +198,14 @@
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding Size, Converter={StaticResource FileSizeConverter}}"
+                                              Foreground="{Binding IsAccessible, Converter={StaticResource AccessibilityColorConverter}}"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Type" Width="80">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Type}"
                                               Foreground="{Binding IsAccessible, Converter={StaticResource AccessibilityColorConverter}}"/>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>

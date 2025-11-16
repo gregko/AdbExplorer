@@ -15,5 +15,6 @@ namespace AdbExplorer.Models
         public bool IsDirectory { get; set; }
         public bool IsAccessible { get; set; } = true;
         public string FileType { get; set; } = "";
+        public string Type { get; set; } = "";  // File extension without dot
     }
 }

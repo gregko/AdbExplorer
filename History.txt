@@ -1,6 +1,24 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.3.2 - 2025-11-16
+---------------------------
+- Added column header sorting with smart alphabetical order:
+  * Click on Name, Size, Modified, Type, or Permissions headers to sort
+  * Smart natural sorting for names (e.g., file2 comes before file10)
+  * Size column sorts by actual byte values, not alphabetically
+  * Modified column sorts by actual date/time, not alphabetically
+  * First click sorts ascending, second click sorts descending
+  * Directories always appear before files regardless of sorting
+- Added new Type column showing file extensions:
+  * Displays file extensions without the dot (e.g., "txt", "jpg", "pdf")
+  * Empty for directories
+  * Supports stable sorting - maintains previous sort order within type groups
+- Made sort order persistent:
+  * Sort preferences are saved and restored across app restarts
+  * New windows automatically use the last selected sort order
+  * Sort order is maintained when navigating between directories
+
 Version 1.3.1 - 2025-11-01
 ---------------------------
 - Fixed Ctrl+C keyboard shortcut not working:

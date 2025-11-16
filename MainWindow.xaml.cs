@@ -53,6 +53,12 @@ namespace AdbExplorer
         private bool pendingDeviceRefresh;
         private bool isLoadingRootFolders = false;
 
+        // Column sorting state
+        private string? currentSortColumn = null;
+        private bool sortAscending = true;
+        private string? previousSortColumn = null;
+        private bool previousSortAscending = true;
+
         // Keep the parameterless constructor for XAML
         public MainWindow() : this(null, null)
         {
@@ -332,6 +338,15 @@ namespace AdbExplorer
             
             // Initialize favorites
             LoadFavorites();
+
+            // Restore sorting preferences
+            if (!string.IsNullOrEmpty(settings.CurrentSortColumn))
+            {
+                currentSortColumn = settings.CurrentSortColumn;
+                sortAscending = settings.SortAscending;
+                previousSortColumn = settings.PreviousSortColumn;
+                previousSortAscending = settings.PreviousSortAscending;
+            }
 
             // Restore window size and position
             if (settings.WindowWidth > 0 && settings.WindowHeight > 0)
@@ -767,10 +782,22 @@ namespace AdbExplorer
                 var files = await Task.Run(() => fileSystemService.GetFiles(path));
 
                 currentFiles.Clear();
-                foreach (var file in files.OrderBy(f => !f.IsDirectory).ThenBy(f => f.Name, new NaturalStringComparer()))
+
+                // If no sort column is set, default to sorting by Name
+                if (string.IsNullOrEmpty(currentSortColumn))
+                {
+                    currentSortColumn = "Name";
+                    sortAscending = true;
+                }
+
+                // Add all files first
+                foreach (var file in files)
                 {
                     currentFiles.Add(file);
                 }
+
+                // Apply current sorting
+                SortFileList();
 
                 UpdateStatusBar();
                 StatusText.Text = "Ready";
@@ -819,6 +846,211 @@ namespace AdbExplorer
                 {
                     await OpenFileInWindows(item);
                 }
+            }
+        }
+
+        private void GridViewColumnHeader_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is GridViewColumnHeader columnHeader && columnHeader.Content != null)
+            {
+                string columnName = columnHeader.Content.ToString() ?? "";
+
+                // Save previous sort state before updating
+                previousSortColumn = currentSortColumn;
+                previousSortAscending = sortAscending;
+
+                // Toggle sort direction if clicking the same column
+                if (currentSortColumn == columnName)
+                {
+                    sortAscending = !sortAscending;
+                }
+                else
+                {
+                    currentSortColumn = columnName;
+                    sortAscending = true;
+                }
+
+                SortFileList();
+
+                // Save sorting preferences to settings
+                settings.CurrentSortColumn = currentSortColumn;
+                settings.SortAscending = sortAscending;
+                settings.PreviousSortColumn = previousSortColumn;
+                settings.PreviousSortAscending = previousSortAscending;
+                settings.Save();
+            }
+        }
+
+        private void SortFileList()
+        {
+            if (currentFiles == null || currentFiles.Count == 0 || string.IsNullOrEmpty(currentSortColumn))
+                return;
+
+            var sortedList = new List<FileItem>(currentFiles);
+
+            // Always keep directories first, then apply the column sorting
+            switch (currentSortColumn)
+            {
+                case "Name":
+                    if (sortAscending)
+                    {
+                        sortedList = sortedList.OrderBy(f => !f.IsDirectory)
+                                               .ThenBy(f => f.Name, new NaturalStringComparer())
+                                               .ToList();
+                    }
+                    else
+                    {
+                        sortedList = sortedList.OrderBy(f => !f.IsDirectory)
+                                               .ThenByDescending(f => f.Name, new NaturalStringComparer())
+                                               .ToList();
+                    }
+                    break;
+
+                case "Size":
+                    if (sortAscending)
+                    {
+                        sortedList = sortedList.OrderBy(f => !f.IsDirectory)
+                                               .ThenBy(f => f.Size)
+                                               .ToList();
+                    }
+                    else
+                    {
+                        sortedList = sortedList.OrderBy(f => !f.IsDirectory)
+                                               .ThenByDescending(f => f.Size)
+                                               .ToList();
+                    }
+                    break;
+
+                case "Modified":
+                    if (sortAscending)
+                    {
+                        sortedList = sortedList.OrderBy(f => !f.IsDirectory)
+                                               .ThenBy(f => f.Modified)
+                                               .ToList();
+                    }
+                    else
+                    {
+                        sortedList = sortedList.OrderBy(f => !f.IsDirectory)
+                                               .ThenByDescending(f => f.Modified)
+                                               .ToList();
+                    }
+                    break;
+
+                case "Permissions":
+                    if (sortAscending)
+                    {
+                        sortedList = sortedList.OrderBy(f => !f.IsDirectory)
+                                               .ThenBy(f => f.Permissions)
+                                               .ToList();
+                    }
+                    else
+                    {
+                        sortedList = sortedList.OrderBy(f => !f.IsDirectory)
+                                               .ThenByDescending(f => f.Permissions)
+                                               .ToList();
+                    }
+                    break;
+
+                case "Type":
+                    // For Type sorting, maintain the previous sort order within each type group (stable sort)
+                    if (!string.IsNullOrEmpty(previousSortColumn) && previousSortColumn != "Type")
+                    {
+                        // Apply stable sorting - sort by Type first, then by previous sort criteria
+                        if (sortAscending)
+                        {
+                            var query = sortedList.OrderBy(f => !f.IsDirectory)
+                                                  .ThenBy(f => f.Type);
+
+                            // Apply secondary sort based on previous column
+                            switch (previousSortColumn)
+                            {
+                                case "Name":
+                                    query = previousSortAscending
+                                        ? query.ThenBy(f => f.Name, new NaturalStringComparer())
+                                        : query.ThenByDescending(f => f.Name, new NaturalStringComparer());
+                                    break;
+                                case "Size":
+                                    query = previousSortAscending
+                                        ? query.ThenBy(f => f.Size)
+                                        : query.ThenByDescending(f => f.Size);
+                                    break;
+                                case "Modified":
+                                    query = previousSortAscending
+                                        ? query.ThenBy(f => f.Modified)
+                                        : query.ThenByDescending(f => f.Modified);
+                                    break;
+                                case "Permissions":
+                                    query = previousSortAscending
+                                        ? query.ThenBy(f => f.Permissions)
+                                        : query.ThenByDescending(f => f.Permissions);
+                                    break;
+                                default:
+                                    query = query.ThenBy(f => f.Name, new NaturalStringComparer());
+                                    break;
+                            }
+                            sortedList = query.ToList();
+                        }
+                        else
+                        {
+                            var query = sortedList.OrderBy(f => !f.IsDirectory)
+                                                  .ThenByDescending(f => f.Type);
+
+                            // Apply secondary sort based on previous column
+                            switch (previousSortColumn)
+                            {
+                                case "Name":
+                                    query = previousSortAscending
+                                        ? query.ThenBy(f => f.Name, new NaturalStringComparer())
+                                        : query.ThenByDescending(f => f.Name, new NaturalStringComparer());
+                                    break;
+                                case "Size":
+                                    query = previousSortAscending
+                                        ? query.ThenBy(f => f.Size)
+                                        : query.ThenByDescending(f => f.Size);
+                                    break;
+                                case "Modified":
+                                    query = previousSortAscending
+                                        ? query.ThenBy(f => f.Modified)
+                                        : query.ThenByDescending(f => f.Modified);
+                                    break;
+                                case "Permissions":
+                                    query = previousSortAscending
+                                        ? query.ThenBy(f => f.Permissions)
+                                        : query.ThenByDescending(f => f.Permissions);
+                                    break;
+                                default:
+                                    query = query.ThenBy(f => f.Name, new NaturalStringComparer());
+                                    break;
+                            }
+                            sortedList = query.ToList();
+                        }
+                    }
+                    else
+                    {
+                        // No previous sort or previous was also Type, just sort by Type then Name
+                        if (sortAscending)
+                        {
+                            sortedList = sortedList.OrderBy(f => !f.IsDirectory)
+                                                   .ThenBy(f => f.Type)
+                                                   .ThenBy(f => f.Name, new NaturalStringComparer())
+                                                   .ToList();
+                        }
+                        else
+                        {
+                            sortedList = sortedList.OrderBy(f => !f.IsDirectory)
+                                                   .ThenByDescending(f => f.Type)
+                                                   .ThenBy(f => f.Name, new NaturalStringComparer())
+                                                   .ToList();
+                        }
+                    }
+                    break;
+            }
+
+            // Clear and repopulate the collection to update the UI
+            currentFiles.Clear();
+            foreach (var item in sortedList)
+            {
+                currentFiles.Add(item);
             }
         }
 

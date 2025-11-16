@@ -21,6 +21,12 @@ namespace AdbExplorer
         public double WindowTop { get; set; } = 100;
         public List<FavoriteItem> Favorites { get; set; } = new List<FavoriteItem>();
 
+        // Column sorting preferences
+        public string? CurrentSortColumn { get; set; } = "Name";
+        public bool SortAscending { get; set; } = true;
+        public string? PreviousSortColumn { get; set; }
+        public bool PreviousSortAscending { get; set; } = true;
+
         public static Settings Load()
         {
             try
