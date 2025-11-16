@@ -241,6 +241,9 @@
                         <MenuItem Header="Rename" Click="RenameMenuItem_Click"/>
                         <MenuItem Header="Delete" Click="DeleteMenuItem_Click"/>
                         <Separator/>
+                        <MenuItem Header="Copy file name" Click="CopyFileNameMenuItem_Click"/>
+                        <MenuItem Header="Copy full path" Click="CopyFullPathMenuItem_Click"/>
+                        <Separator/>
                         <MenuItem Header="New Folder" Click="NewFolderMenuItem_Click"/>
                         <Separator/>
                         <MenuItem Header="Properties" Click="PropertiesMenuItem_Click"/>

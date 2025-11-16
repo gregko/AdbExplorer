@@ -2550,6 +2550,46 @@ namespace AdbExplorer
             await DeleteSelectedItems();
         }
 
+        private void CopyFileNameMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedItems = FileListView.SelectedItems.Cast<FileItem>().ToList();
+            if (selectedItems.Count == 0) return;
+
+            // If multiple items selected, join with newlines
+            var fileNames = selectedItems.Select(item => item.Name);
+            var text = string.Join(Environment.NewLine, fileNames);
+
+            try
+            {
+                Clipboard.SetText(text);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to copy to clipboard: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void CopyFullPathMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedItems = FileListView.SelectedItems.Cast<FileItem>().ToList();
+            if (selectedItems.Count == 0) return;
+
+            // If multiple items selected, join with newlines
+            var fullPaths = selectedItems.Select(item => item.FullPath);
+            var text = string.Join(Environment.NewLine, fullPaths);
+
+            try
+            {
+                Clipboard.SetText(text);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to copy to clipboard: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private async Task DeleteSelectedItems()
         {
             var selectedItems = FileListView.SelectedItems.Cast<FileItem>().ToList();

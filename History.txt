@@ -1,6 +1,14 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.3.3 - 2025-11-16
+---------------------------
+- Added context menu options for copying file/folder information:
+  * "Copy file name" - Copies just the name of the selected file(s) or folder(s) to clipboard
+  * "Copy full path" - Copies the complete path of the selected file(s) or folder(s) to clipboard
+  * Both options support multiple selections (joined with newlines)
+  * Menu items appear after the Delete option with a separator
+
 Version 1.3.2 - 2025-11-16
 ---------------------------
 - Added column header sorting with smart alphabetical order:
