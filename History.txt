@@ -3,6 +3,10 @@ ADB Explorer - Version History
 
 Version 1.4.0 - 2025-11-27
 ---------------------------
+- Fixed keyboard shortcuts not working properly:
+  * Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A now work reliably via WPF CommandBindings
+  * Alt+Up, Alt+Left, Alt+Right navigation shortcuts now work correctly
+  * TextBox controls (like path bar) retain their native clipboard behavior
 - Redesigned device selection with tab-based interface:
   * Replaced top toolbar with device tabs for quick switching between connected devices
   * Each connected device now appears as a separate tab

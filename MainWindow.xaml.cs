@@ -239,8 +239,10 @@ namespace AdbExplorer
                 await CreateNewFolder();
             }
 
-            // Alt+Left - Back
-            if (e.Key == Key.Left && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+            // Alt+Left - Back (use SystemKey for Alt combinations)
+            var actualKey = e.Key == Key.System ? e.SystemKey : e.Key;
+
+            if (actualKey == Key.Left && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
             {
                 e.Handled = true;
                 if (navigationHistory.Count > 0)
@@ -252,7 +254,7 @@ namespace AdbExplorer
             }
 
             // Alt+Right - Forward
-            if (e.Key == Key.Right && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+            if (actualKey == Key.Right && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
             {
                 e.Handled = true;
                 if (navigationForward.Count > 0)
@@ -264,7 +266,7 @@ namespace AdbExplorer
             }
 
             // Alt+Up - Up Directory
-            if (e.Key == Key.Up && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
+            if (actualKey == Key.Up && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
             {
                 e.Handled = true;
                 if (currentPath != "/")
@@ -314,6 +316,157 @@ namespace AdbExplorer
                 }
             }
         }
+
+        #region Command Bindings for Clipboard Operations
+
+        private void CopyCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+        {
+            // Check if focus is in a TextBox - let it handle copy natively
+            if (Keyboard.FocusedElement is TextBox)
+            {
+                return;
+            }
+
+            if (FileListView.SelectedItems.Count > 0)
+            {
+                CopySelectedItems();
+                e.Handled = true;
+            }
+        }
+
+        private void CopyCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
+        {
+            // Allow TextBox to handle its own copy
+            if (Keyboard.FocusedElement is TextBox)
+            {
+                e.CanExecute = true;
+                e.ContinueRouting = true;
+                return;
+            }
+
+            e.CanExecute = FileListView.SelectedItems.Count > 0;
+        }
+
+        private async void PasteCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+        {
+            // Check if focus is in a TextBox - let it handle paste natively
+            if (Keyboard.FocusedElement is TextBox)
+            {
+                return;
+            }
+
+            await PasteItems();
+            e.Handled = true;
+        }
+
+        private void PasteCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
+        {
+            // Allow TextBox to handle its own paste
+            if (Keyboard.FocusedElement is TextBox)
+            {
+                e.CanExecute = true;
+                e.ContinueRouting = true;
+                return;
+            }
+
+            e.CanExecute = Clipboard.ContainsData("AdbFiles") || Clipboard.ContainsFileDropList();
+        }
+
+        private void CutCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+        {
+            // Check if focus is in a TextBox - let it handle cut natively
+            if (Keyboard.FocusedElement is TextBox)
+            {
+                return;
+            }
+
+            // Cut is not implemented for ADB files (would need to track cut state)
+            // For now, just copy
+            if (FileListView.SelectedItems.Count > 0)
+            {
+                CopySelectedItems();
+                e.Handled = true;
+            }
+        }
+
+        private void CutCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
+        {
+            // Allow TextBox to handle its own cut
+            if (Keyboard.FocusedElement is TextBox)
+            {
+                e.CanExecute = true;
+                e.ContinueRouting = true;
+                return;
+            }
+
+            e.CanExecute = FileListView.SelectedItems.Count > 0;
+        }
+
+        private void SelectAllCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+        {
+            // Check if focus is in a TextBox - let it handle select all natively
+            if (Keyboard.FocusedElement is TextBox)
+            {
+                return;
+            }
+
+            FileListView.SelectAll();
+            e.Handled = true;
+        }
+
+        private void SelectAllCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
+        {
+            // Allow TextBox to handle its own select all
+            if (Keyboard.FocusedElement is TextBox)
+            {
+                e.CanExecute = true;
+                e.ContinueRouting = true;
+                return;
+            }
+
+            e.CanExecute = true;
+        }
+
+        private async void DeleteCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+        {
+            // Check if focus is in a TextBox - let it handle delete natively
+            if (Keyboard.FocusedElement is TextBox)
+            {
+                return;
+            }
+
+            if (FileListView.SelectedItems.Count > 0 &&
+                (FileListView.IsFocused || FileListView.IsKeyboardFocusWithin))
+            {
+                await DeleteSelectedItems();
+                e.Handled = true;
+            }
+            else if (FolderTreeView.SelectedItem is FolderNode selectedFolder &&
+                     (FolderTreeView.IsFocused || FolderTreeView.IsKeyboardFocusWithin))
+            {
+                if (selectedFolder.FullPath != "/")
+                {
+                    await DeleteTreeViewItem(selectedFolder);
+                    e.Handled = true;
+                }
+            }
+        }
+
+        private void DeleteCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
+        {
+            // Allow TextBox to handle its own delete
+            if (Keyboard.FocusedElement is TextBox)
+            {
+                e.CanExecute = true;
+                e.ContinueRouting = true;
+                return;
+            }
+
+            e.CanExecute = FileListView.SelectedItems.Count > 0 ||
+                          (FolderTreeView.SelectedItem is FolderNode folder && folder.FullPath != "/");
+        }
+
+        #endregion
 
 
         private void InitializeServices()

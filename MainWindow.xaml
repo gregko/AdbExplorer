@@ -10,6 +10,14 @@
         Drop="Window_Drop"
         DragOver="Window_DragOver">
 
+    <Window.CommandBindings>
+        <CommandBinding Command="ApplicationCommands.Copy" Executed="CopyCommand_Executed" CanExecute="CopyCommand_CanExecute"/>
+        <CommandBinding Command="ApplicationCommands.Paste" Executed="PasteCommand_Executed" CanExecute="PasteCommand_CanExecute"/>
+        <CommandBinding Command="ApplicationCommands.Cut" Executed="CutCommand_Executed" CanExecute="CutCommand_CanExecute"/>
+        <CommandBinding Command="ApplicationCommands.SelectAll" Executed="SelectAllCommand_Executed" CanExecute="SelectAllCommand_CanExecute"/>
+        <CommandBinding Command="ApplicationCommands.Delete" Executed="DeleteCommand_Executed" CanExecute="DeleteCommand_CanExecute"/>
+    </Window.CommandBindings>
+
     <Window.Resources>
         <local:FileSizeConverter x:Key="FileSizeConverter"/>
         <local:FileIconConverter x:Key="FileIconConverter"/>
