@@ -1,6 +1,20 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.4.0 - 2025-11-27
+---------------------------
+- Redesigned device selection with tab-based interface:
+  * Replaced top toolbar with device tabs for quick switching between connected devices
+  * Each connected device now appears as a separate tab
+  * Removed "Refresh Devices" button (devices refresh automatically on connect/disconnect)
+  * Removed redundant "Connected:" status text
+- Moved "New Window" button to navigation toolbar:
+  * Now displayed as icon-only (📂) to save space
+  * Located between the sync button and favorites dropdown
+- Updated folder icons to yellow color:
+  * Folder icons now use Windows 11-style yellow color (#E8A317)
+  * Applied to both the folder tree (left panel) and file list (right panel)
+
 Version 1.3.3 - 2025-11-16
 ---------------------------
 - Added context menu options for copying file/folder information:

@@ -87,7 +87,8 @@ namespace AdbExplorer
         // New method for opening new windows
         private void OpenNewWindow(string? deviceId = null, string? path = null)
         {
-            var newWindow = new MainWindow(deviceId ?? (DeviceComboBox.SelectedItem as AndroidDevice)?.Id, path ?? currentPath);
+            var selectedDevice = (DeviceTabControl.SelectedItem as TabItem)?.Tag as AndroidDevice;
+            var newWindow = new MainWindow(deviceId ?? selectedDevice?.Id, path ?? currentPath);
             newWindow.Show();
         }
 
@@ -332,7 +333,6 @@ namespace AdbExplorer
             navigationForward = new Stack<string>();
             tempFileMapping = new Dictionary<string, string>();
 
-            DeviceComboBox.ItemsSource = devices;
             FileListView.ItemsSource = currentFiles;
             FolderTreeView.ItemsSource = rootFolders;
             
@@ -428,7 +428,7 @@ namespace AdbExplorer
             {
                 StatusText.Text = "Scanning for devices...";
 
-                var previouslySelectedDeviceId = (DeviceComboBox.SelectedItem as AndroidDevice)?.Id;
+                var previouslySelectedDeviceId = activeDeviceId;
                 var deviceList = await Task.Run(() => adbService.GetDevices());
 
                 Trace.WriteLine($"MainWindow obtained {deviceList.Count} device(s) from adb.");
@@ -440,8 +440,8 @@ namespace AdbExplorer
                     devices.Add(device);
                 }
 
-                // ObservableCollection automatically notifies the ComboBox of changes
-                // No need to call Items.Refresh() when ItemsSource is bound
+                // Update device tabs
+                UpdateDeviceTabs();
 
                 if (devices.Count > 0)
                 {
@@ -475,7 +475,8 @@ namespace AdbExplorer
                         Dispatcher.BeginInvoke(new Action(() => suppressDeviceSelectionHandling = false), DispatcherPriority.Background);
                     }
 
-                    DeviceComboBox.SelectedItem = deviceToSelect;
+                    // Select the tab for the device
+                    SelectDeviceTab(deviceToSelect);
 
                     if (!string.IsNullOrEmpty(initialPath))
                     {
@@ -485,13 +486,12 @@ namespace AdbExplorer
                 else
                 {
                     suppressDeviceSelectionHandling = false;
-                    DeviceComboBox.SelectedIndex = -1;
+                    DeviceTabControl.SelectedIndex = -1;
                     activeDeviceId = null;
-                    ConnectionStatusLabel.Content = "No devices found";
-                    ConnectionStatusLabel.Foreground = System.Windows.Media.Brushes.Red;
+                    StatusText.Text = "No devices found";
                 }
 
-                StatusText.Text = $"Found {devices.Count} device(s)";
+                StatusText.Text = devices.Count > 0 ? $"Found {devices.Count} device(s)" : "No devices found";
             }
             catch (Exception ex)
             {
@@ -513,6 +513,43 @@ namespace AdbExplorer
             }
         }
 
+        private void UpdateDeviceTabs()
+        {
+            DeviceTabControl.Items.Clear();
+            foreach (var device in devices)
+            {
+                var tabItem = new TabItem
+                {
+                    Header = device.Model,
+                    Tag = device,
+                    ToolTip = $"{device.Model} ({device.Id}) - {device.Status}"
+                };
+                DeviceTabControl.Items.Add(tabItem);
+            }
+
+            if (devices.Count == 0)
+            {
+                var emptyTab = new TabItem
+                {
+                    Header = "No devices",
+                    IsEnabled = false
+                };
+                DeviceTabControl.Items.Add(emptyTab);
+            }
+        }
+
+        private void SelectDeviceTab(AndroidDevice device)
+        {
+            foreach (TabItem tab in DeviceTabControl.Items)
+            {
+                if (tab.Tag is AndroidDevice tabDevice && tabDevice.Id == device.Id)
+                {
+                    DeviceTabControl.SelectedItem = tab;
+                    break;
+                }
+            }
+        }
+
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             // Add keyboard shortcut for sync tree
@@ -522,9 +559,9 @@ namespace AdbExplorer
             this.InputBindings.Add(syncBinding);
         }
 
-        private async void DeviceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private async void DeviceTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (DeviceComboBox.SelectedItem is not AndroidDevice device)
+            if (DeviceTabControl.SelectedItem is not TabItem selectedTab || selectedTab.Tag is not AndroidDevice device)
             {
                 activeDeviceId = null;
                 return;
@@ -532,12 +569,10 @@ namespace AdbExplorer
 
             bool bypassReload = suppressDeviceSelectionHandling && activeDeviceId == device.Id;
 
-            Trace.WriteLine($"MainWindow selection changed to {device.Id}, bypassReload={bypassReload}");
+            Trace.WriteLine($"MainWindow tab selection changed to {device.Id}, bypassReload={bypassReload}");
             try
             {
                 adbService.SetCurrentDevice(device.Id);
-                ConnectionStatusLabel.Content = $"Connected: {device.Model}";
-                ConnectionStatusLabel.Foreground = System.Windows.Media.Brushes.Green;
                 activeDeviceId = device.Id;
 
                 if (bypassReload)
@@ -566,7 +601,7 @@ namespace AdbExplorer
             finally
             {
                 suppressDeviceSelectionHandling = false;
-                Trace.WriteLine("MainWindow selection handler reset suppression flag.");
+                Trace.WriteLine("MainWindow tab selection handler reset suppression flag.");
             }
         }
 
@@ -2225,11 +2260,6 @@ namespace AdbExplorer
             navigationHistory.Push(currentPath);
             navigationForward.Clear();
             await NavigateToPath("/");
-        }
-
-        private void RefreshDevicesButton_Click(object sender, RoutedEventArgs e)
-        {
-            RequestDeviceRefresh();
         }
 
         private async Task RefreshCurrentFolder()
