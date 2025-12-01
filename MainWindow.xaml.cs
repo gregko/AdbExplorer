@@ -593,7 +593,8 @@ namespace AdbExplorer
                     devices.Add(device);
                 }
 
-                // Update device tabs
+                // Update device tabs (suppress selection handling to prevent unwanted navigation)
+                suppressDeviceSelectionHandling = true;
                 UpdateDeviceTabs();
 
                 if (devices.Count > 0)
@@ -622,14 +623,22 @@ namespace AdbExplorer
                     var isSameDevice = !string.IsNullOrEmpty(previouslySelectedDeviceId) &&
                                        deviceToSelect.Id == previouslySelectedDeviceId;
 
+                    // Select the tab for the device (still suppressed)
+                    SelectDeviceTab(deviceToSelect);
+
+                    // Now allow selection handling, but only trigger reload if it's a different device
                     if (isSameDevice)
                     {
-                        suppressDeviceSelectionHandling = true;
-                        Dispatcher.BeginInvoke(new Action(() => suppressDeviceSelectionHandling = false), DispatcherPriority.Background);
+                        // Same device - just reset flag without triggering reload
+                        suppressDeviceSelectionHandling = false;
                     }
-
-                    // Select the tab for the device
-                    SelectDeviceTab(deviceToSelect);
+                    else
+                    {
+                        // Different device - need to trigger the selection handler to load content
+                        suppressDeviceSelectionHandling = false;
+                        // Manually trigger what the selection handler would do
+                        await HandleDeviceSelection(deviceToSelect);
+                    }
 
                     if (!string.IsNullOrEmpty(initialPath))
                     {
@@ -656,6 +665,7 @@ namespace AdbExplorer
             finally
             {
                 isDeviceRefreshInProgress = false;
+                suppressDeviceSelectionHandling = false;  // Safety reset
                 Trace.WriteLine($"MainWindow device refresh complete. Pending? {pendingDeviceRefresh}");
 
                 if (pendingDeviceRefresh)
@@ -714,47 +724,54 @@ namespace AdbExplorer
 
         private async void DeviceTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // Skip handling entirely if suppressed (e.g., during tab rebuilding)
+            if (suppressDeviceSelectionHandling)
+            {
+                return;
+            }
+
             if (DeviceTabControl.SelectedItem is not TabItem selectedTab || selectedTab.Tag is not AndroidDevice device)
             {
                 activeDeviceId = null;
                 return;
             }
 
-            bool bypassReload = suppressDeviceSelectionHandling && activeDeviceId == device.Id;
+            bool bypassReload = activeDeviceId == device.Id;
 
             Trace.WriteLine($"MainWindow tab selection changed to {device.Id}, bypassReload={bypassReload}");
-            try
+
+            adbService.SetCurrentDevice(device.Id);
+            activeDeviceId = device.Id;
+
+            if (bypassReload)
             {
-                adbService.SetCurrentDevice(device.Id);
-                activeDeviceId = device.Id;
-
-                if (bypassReload)
-                {
-                    return;
-                }
-
-                // Save selected device
-                settings.LastDevice = device.Id;
-                settings.Save();
-
-                await LoadRootFolders();
-
-                // Try to restore last path if it's the same device
-                if (!string.IsNullOrEmpty(settings.LastPath) && device.Id == settings.LastDevice)
-                {
-                    isRestoringPath = true;
-                    await RestoreLastPath(settings.LastPath);
-                    isRestoringPath = false;
-                }
-                else
-                {
-                    await NavigateToPath("/");
-                }
+                return;
             }
-            finally
+
+            await HandleDeviceSelection(device);
+        }
+
+        private async Task HandleDeviceSelection(AndroidDevice device)
+        {
+            // Save selected device
+            settings.LastDevice = device.Id;
+            settings.Save();
+
+            adbService.SetCurrentDevice(device.Id);
+            activeDeviceId = device.Id;
+
+            await LoadRootFolders();
+
+            // Try to restore last path if it's the same device
+            if (!string.IsNullOrEmpty(settings.LastPath) && device.Id == settings.LastDevice)
             {
-                suppressDeviceSelectionHandling = false;
-                Trace.WriteLine("MainWindow tab selection handler reset suppression flag.");
+                isRestoringPath = true;
+                await RestoreLastPath(settings.LastPath);
+                isRestoringPath = false;
+            }
+            else
+            {
+                await NavigateToPath("/");
             }
         }
 
