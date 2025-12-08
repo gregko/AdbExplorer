@@ -1,6 +1,13 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.4.2 - 2025-12-08
+---------------------------
+- Fixed compatibility with BlueStacks emulator:
+  * Directory listing now works correctly for /sdcard, /storage, and other symlinked paths
+  * Added fallback symlink resolution using 'realpath' when 'readlink -f' fails
+  * Improved handling of emulator-specific filesystem behaviors
+
 Version 1.4.1 - 2025-12-01
 ---------------------------
 - Fixed last directory not being restored on app restart after system reboot

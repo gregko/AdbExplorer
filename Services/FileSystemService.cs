@@ -25,14 +25,36 @@ namespace AdbExplorer.Services
             {
                 // First, resolve the path if it's a symlink
                 var resolvedPath = ResolveSymlink(path);
+                System.Diagnostics.Debug.WriteLine($"GetFiles: path={path}, resolvedPath={resolvedPath}");
 
                 // For ls command, we need to escape the path properly
                 // Use double quotes for the ls command as it handles paths better
                 var escapedPath = "\"" + resolvedPath.Replace("\"", "\\\"").Replace("$", "\\$").Replace("`", "\\`") + "\"";
-                var output = adbService.ExecuteShellCommand($"ls -la {escapedPath} 2>&1");
 
-                // Check for permission denied in output
-                if (output.Contains("Permission denied") && !output.Contains("total"))
+                // First try: standard ls -la with path
+                var output = adbService.ExecuteShellCommand($"ls -la {escapedPath} 2>&1");
+                System.Diagnostics.Debug.WriteLine($"GetFiles ls output for {path}:\n{output}");
+
+                // If we got no output or it looks empty/error, try alternative: cd to directory first
+                // Some emulators (like BlueStacks) work better this way
+                if (string.IsNullOrWhiteSpace(output) ||
+                    (!output.Contains("total") && !output.Contains("drwx") && !output.Contains("-rw") && !output.Contains("lrwx")))
+                {
+                    System.Diagnostics.Debug.WriteLine($"GetFiles: trying cd + ls approach for {resolvedPath}");
+                    var altOutput = adbService.ExecuteShellCommand($"cd {escapedPath} && ls -la 2>&1");
+                    System.Diagnostics.Debug.WriteLine($"GetFiles cd+ls output for {path}:\n{altOutput}");
+
+                    // If alternative approach worked better, use it
+                    if (!string.IsNullOrWhiteSpace(altOutput) &&
+                        (altOutput.Contains("total") || altOutput.Contains("drwx") || altOutput.Contains("-rw") || altOutput.Contains("lrwx")))
+                    {
+                        output = altOutput;
+                    }
+                }
+
+                // Check for permission denied in output - but only if NO valid entries are found
+                // Some emulators like BlueStacks may include "Permission denied" in output but still list files
+                if (output.Contains("Permission denied") && !output.Contains("total") && !output.Contains("drwx") && !output.Contains("-rw"))
                 {
                     throw new UnauthorizedAccessException($"Permission denied: {path}");
                 }
@@ -97,22 +119,64 @@ namespace AdbExplorer.Services
             {
                 // For readlink, use double quotes
                 var escapedPath = "\"" + path.Replace("\"", "\\\"").Replace("$", "\\$").Replace("`", "\\`") + "\"";
+
+                // Try readlink -f first (canonical path resolution)
                 var result = adbService.ExecuteShellCommand($"readlink -f {escapedPath} 2>/dev/null");
-                if (!string.IsNullOrWhiteSpace(result) && !result.Contains("No such file"))
+                System.Diagnostics.Debug.WriteLine($"ResolveSymlink: readlink -f {escapedPath} returned: '{result}'");
+
+                if (!string.IsNullOrWhiteSpace(result) && !result.Contains("No such file") && !result.Contains("not found"))
                 {
                     var resolved = result.Trim();
-                    if (!string.IsNullOrWhiteSpace(resolved) && resolved != path)
+                    if (!string.IsNullOrWhiteSpace(resolved) && resolved != path && !resolved.StartsWith("readlink:"))
                     {
                         System.Diagnostics.Debug.WriteLine($"Resolved symlink: {path} -> {resolved}");
                         return resolved;
                     }
                 }
+
+                // If readlink -f fails, try 'realpath' as an alternative (available on some Android versions)
+                result = adbService.ExecuteShellCommand($"realpath {escapedPath} 2>/dev/null");
+                System.Diagnostics.Debug.WriteLine($"ResolveSymlink: realpath {escapedPath} returned: '{result}'");
+
+                if (!string.IsNullOrWhiteSpace(result) && !result.Contains("No such file") && !result.Contains("not found"))
+                {
+                    var resolved = result.Trim();
+                    if (!string.IsNullOrWhiteSpace(resolved) && resolved != path && !resolved.StartsWith("realpath:"))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Resolved symlink via realpath: {path} -> {resolved}");
+                        return resolved;
+                    }
+                }
+
+                // If both fail, try a simple readlink (without -f) to see if it's a direct symlink
+                result = adbService.ExecuteShellCommand($"readlink {escapedPath} 2>/dev/null");
+                System.Diagnostics.Debug.WriteLine($"ResolveSymlink: readlink {escapedPath} returned: '{result}'");
+
+                if (!string.IsNullOrWhiteSpace(result) && !result.Contains("No such file") && !result.Contains("not found"))
+                {
+                    var resolved = result.Trim();
+                    if (!string.IsNullOrWhiteSpace(resolved) && resolved != path && !resolved.StartsWith("readlink:"))
+                    {
+                        // If it's a relative path, make it absolute
+                        if (!resolved.StartsWith("/"))
+                        {
+                            var parentDir = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/');
+                            if (!string.IsNullOrEmpty(parentDir))
+                            {
+                                resolved = parentDir + "/" + resolved;
+                            }
+                        }
+                        System.Diagnostics.Debug.WriteLine($"Resolved direct symlink: {path} -> {resolved}");
+                        return resolved;
+                    }
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                // If readlink fails, just use the original path
+                System.Diagnostics.Debug.WriteLine($"ResolveSymlink exception for {path}: {ex.Message}");
             }
 
+            System.Diagnostics.Debug.WriteLine($"ResolveSymlink: returning original path {path}");
             return path;
         }
 
@@ -120,8 +184,14 @@ namespace AdbExplorer.Services
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine($"ParseLsLine: parsing '{line}' with parent '{parentPath}'");
+
                 // Skip . and .. entries
-                if (line.EndsWith(" .") || line.EndsWith(" ..")) return null;
+                if (line.EndsWith(" .") || line.EndsWith(" .."))
+                {
+                    System.Diagnostics.Debug.WriteLine($"ParseLsLine: skipping . or .. entry");
+                    return null;
+                }
 
                 // Handle lines with question marks (inaccessible items)
                 if (line.Contains("?????????"))
@@ -159,15 +229,34 @@ namespace AdbExplorer.Services
 
                 if (!match.Success)
                 {
+                    System.Diagnostics.Debug.WriteLine($"ParseLsLine: pattern 1 failed, trying pattern 2");
                     // Try simpler pattern for different Android versions
                     pattern = @"^([dlcbps\-][rwxst\-]{9})\s+\d+\s+(\S+)\s+(\S+)\s+(\d+)\s+(.+)$";
                     match = Regex.Match(line, pattern);
 
                     if (!match.Success)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Failed to parse: {line}");
-                        return null;
+                        System.Diagnostics.Debug.WriteLine($"ParseLsLine: pattern 2 also failed for: '{line}'");
+                        // Try a third pattern that handles cases with optional fields differently
+                        // Some Android versions might have different spacing or field order
+                        pattern = @"^([dlcbps\-][rwxst\-]{9})\s+(\S+)\s+(\S+)\s+(\d+)\s+(.+)$";
+                        match = Regex.Match(line, pattern);
+
+                        if (!match.Success)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"ParseLsLine: all patterns failed for line: '{line}'");
+                            return null;
+                        }
+                        System.Diagnostics.Debug.WriteLine($"ParseLsLine: pattern 3 matched");
                     }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"ParseLsLine: pattern 2 matched");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"ParseLsLine: pattern 1 matched");
                 }
 
                 var permissions = match.Groups[1].Value;
@@ -265,10 +354,30 @@ namespace AdbExplorer.Services
                 // Use double quotes for test command
                 var escapedPath = "\"" + symlinkPath.Replace("\"", "\\\"").Replace("$", "\\$").Replace("`", "\\`") + "\"";
                 var result = adbService.ExecuteShellCommand($"test -d {escapedPath} 2>/dev/null && echo 'dir' || echo 'file'");
-                return result.Trim() == "dir";
+                System.Diagnostics.Debug.WriteLine($"IsSymlinkDirectory: test -d {escapedPath} returned: '{result.Trim()}'");
+
+                // Handle cases where the command might fail silently or return unexpected output
+                var trimmed = result.Trim();
+                if (trimmed == "dir")
+                    return true;
+                if (trimmed == "file")
+                    return false;
+
+                // If we get unexpected output, try alternative: ls -ld and check first character
+                result = adbService.ExecuteShellCommand($"ls -ld {escapedPath} 2>/dev/null");
+                System.Diagnostics.Debug.WriteLine($"IsSymlinkDirectory fallback ls -ld: '{result.Trim()}'");
+                if (!string.IsNullOrWhiteSpace(result) && result.Length > 0)
+                {
+                    // If first char is 'd' (directory) or 'l' (symlink pointing to dir), treat as directory
+                    return result[0] == 'd' || (result[0] == 'l' && result.Contains("/"));
+                }
+
+                // Default to treating as directory for navigation purposes
+                return true;
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"IsSymlinkDirectory exception for {symlinkPath}: {ex.Message}");
                 // Assume it's a directory if we can't determine
                 return true;
             }
