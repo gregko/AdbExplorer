@@ -41,23 +41,93 @@
         </TabControl>
 
         <!-- Navigation Toolbar -->
-        <ToolBar Grid.Row="1" Height="35">
-            <Button Name="BackButton" Content="←" Width="30" FontSize="16"
+        <ToolBarTray Grid.Row="1" Height="35" IsLocked="True">
+            <ToolBar OverflowMode="Never">
+            <ToolBar.Resources>
+                <FontFamily x:Key="ToolbarIconFont">Segoe MDL2 Assets</FontFamily>
+
+                <Style x:Key="ToolbarIconButton" TargetType="Button">
+                    <Setter Property="Width" Value="34"/>
+                    <Setter Property="Height" Value="30"/>
+                    <Setter Property="Margin" Value="2,0"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="FontFamily" Value="{StaticResource ToolbarIconFont}"/>
+                    <Setter Property="FontSize" Value="16"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="BorderBrush" Value="Transparent"/>
+                    <Setter Property="BorderThickness" Value="1"/>
+                    <Setter Property="Foreground" Value="#444444"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="Border"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="4">
+                                    <ContentPresenter HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Border" Property="Background" Value="#120078D4"/>
+                                        <Setter TargetName="Border" Property="BorderBrush" Value="#330078D4"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter TargetName="Border" Property="Background" Value="#220078D4"/>
+                                        <Setter TargetName="Border" Property="BorderBrush" Value="#550078D4"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Foreground" Value="#9AA0A6"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+
+                <Style x:Key="ToolbarBadge" TargetType="Border">
+                    <Setter Property="Width" Value="13"/>
+                    <Setter Property="Height" Value="13"/>
+                    <Setter Property="CornerRadius" Value="6.5"/>
+                    <Setter Property="HorizontalAlignment" Value="Right"/>
+                    <Setter Property="VerticalAlignment" Value="Bottom"/>
+                    <Setter Property="Margin" Value="0,0,-4,-4"/>
+                </Style>
+
+                <Style x:Key="ToolbarBadgeGlyph" TargetType="TextBlock">
+                    <Setter Property="FontFamily" Value="{StaticResource ToolbarIconFont}"/>
+                    <Setter Property="FontSize" Value="10"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="HorizontalAlignment" Value="Center"/>
+                    <Setter Property="VerticalAlignment" Value="Center"/>
+                </Style>
+            </ToolBar.Resources>
+
+            <Button Name="BackButton" Content="&#xE72B;" Style="{StaticResource ToolbarIconButton}"
+                    Foreground="#2D7DBA"
                     Click="BackButton_Click" IsEnabled="False" ToolTip="Back"/>
-            <Button Name="ForwardButton" Content="→" Width="30" FontSize="16"
+            <Button Name="ForwardButton" Content="&#xE72A;" Style="{StaticResource ToolbarIconButton}"
+                    Foreground="#2D7DBA"
                     Click="ForwardButton_Click" IsEnabled="False" ToolTip="Forward"/>
-            <Button Name="UpButton" Content="↑" Width="30" FontSize="16"
+            <Button Name="UpButton" Content="&#xE74A;" Style="{StaticResource ToolbarIconButton}"
+                    Foreground="#2D7DBA"
                     Click="UpButton_Click" ToolTip="Up"/>
             <Separator/>
-            <Button Name="RefreshButton" Content="↻" Width="30" FontSize="16"
+            <Button Name="RefreshButton" Content="&#xE72C;" Style="{StaticResource ToolbarIconButton}"
+                    Foreground="#2D7DBA"
+                    FontWeight="Bold"
                     Click="RefreshButton_Click" ToolTip="Refresh"/>
-            <Button Name="HomeButton" Content="⌂" Width="30" FontSize="16"
-                    Click="HomeButton_Click" ToolTip="Root"/>
-            <Button Name="SyncTreeButton" Content="🎯" Width="30" FontSize="16"
-            Click="SyncTreeButton_Click" ToolTip="Sync folder tree with current location"/>
             <Separator/>
-            <Button Name="NewWindowButton" Content="📂" Width="30" FontSize="16"
-                    Click="NewWindowButton_Click" ToolTip="Open current folder in new window"/>
+            <Button Name="NewWindowButton" Style="{StaticResource ToolbarIconButton}"
+                    Width="38"
+                    Foreground="#2D7DBA"
+                    Click="NewWindowButton_Click" ToolTip="Open current folder in new window">
+                <Image Width="24" Height="18"
+                       Source="{StaticResource OpenInNewWindowIcon}"
+                       Stretch="Uniform"
+                       VerticalAlignment="Center"/>
+            </Button>
             <Separator/>
             <ComboBox Name="FavoritesComboBox" Width="200" Height="26"
                       VerticalAlignment="Center"
@@ -88,22 +158,70 @@
                     </ContextMenu>
                 </ComboBox.ContextMenu>
             </ComboBox>
-            <Button Name="AddFavoriteButton" Content="⭐+" Width="35"
-                    Click="AddFavoriteButton_Click" ToolTip="Add current folder to favorites"/>
-            <Button Name="RemoveFavoriteButton" Content="⭐-" Width="35"
-                    Click="RemoveFavoriteButton_Click" ToolTip="Remove selected favorite"/>
+            <Button Name="AddFavoriteButton" Style="{StaticResource ToolbarIconButton}"
+                    Foreground="#B8860B"
+                    Click="AddFavoriteButton_Click" ToolTip="Add current folder to favorites">
+                <Grid Width="22" Height="22" VerticalAlignment="Center" Margin="0,-2,0,0">
+                    <TextBlock Text="&#xE734;" FontFamily="{StaticResource ToolbarIconFont}" FontSize="20"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Border Style="{StaticResource ToolbarBadge}" Background="#2E7D32">
+                        <TextBlock Text="&#xE710;" Style="{StaticResource ToolbarBadgeGlyph}"/>
+                    </Border>
+                </Grid>
+            </Button>
+
+            <Button Name="RemoveFavoriteButton" Style="{StaticResource ToolbarIconButton}"
+                    Foreground="#B8860B"
+                    Click="RemoveFavoriteButton_Click" ToolTip="Remove selected favorite">
+                <Grid Width="22" Height="22" VerticalAlignment="Center" Margin="0,-2,0,0">
+                    <TextBlock Text="&#xE734;" FontFamily="{StaticResource ToolbarIconFont}" FontSize="20"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Border Style="{StaticResource ToolbarBadge}" Background="#C15C5C">
+                        <TextBlock Text="&#xE711;" Style="{StaticResource ToolbarBadgeGlyph}"/>
+                    </Border>
+                </Grid>
+            </Button>
             <Separator/>
-            <Button Name="NewFolderButton" Content="📁+" Width="40"
-                    Click="NewFolderButton_Click" ToolTip="New Folder"/>
-            <Button Name="DeleteButton" Content="🗑" Width="30"
+            <Button Name="NewFolderButton" Style="{StaticResource ToolbarIconButton}"
+                    Foreground="#2E7D32"
+                    Click="NewFolderButton_Click" ToolTip="New Folder">
+                <Grid Width="24" Height="24" VerticalAlignment="Center" Margin="0,-2,0,0">
+                    <Viewbox Width="24" Height="24">
+                        <Grid Width="24" Height="24">
+                            <Rectangle Width="18" Height="12" RadiusX="2" RadiusY="2"
+                                       Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                       StrokeThickness="1.6"
+                                       HorizontalAlignment="Left" VerticalAlignment="Top"
+                                       Margin="3,10,0,0"/>
+                            <Rectangle Width="8" Height="5" RadiusX="1.5" RadiusY="1.5"
+                                       Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                       StrokeThickness="1.6"
+                                       HorizontalAlignment="Left" VerticalAlignment="Top"
+                                       Margin="4,7,0,0"/>
+                        </Grid>
+                    </Viewbox>
+                    <Border Style="{StaticResource ToolbarBadge}" Background="#2E7D32">
+                        <TextBlock Text="&#xE710;" Style="{StaticResource ToolbarBadgeGlyph}"/>
+                    </Border>
+                </Grid>
+            </Button>
+
+            <Button Name="DeleteButton" Content="&#xE74D;" Style="{StaticResource ToolbarIconButton}"
+                    Foreground="#C15C5C"
+                    FontSize="18"
                     Click="DeleteButton_Click" ToolTip="Delete"/>
             <Separator/>
-            <Button Name="HelpButton" Content="❓" Width="30" FontSize="16"
-            Click="HelpButton_Click" ToolTip="Help (F1)"/>
+            <Button Name="HelpButton" Content="&#xE897;" Style="{StaticResource ToolbarIconButton}"
+                    Foreground="#556CD6"
+                    FontWeight="Bold"
+                    Click="HelpButton_Click" ToolTip="Help (F1)"/>
             <Separator/>
-            <Button Name="AboutButton" Content="ℹ" Width="30" FontSize="16"
-            Click="AboutButton_Click" ToolTip="About"/>
+            <Button Name="AboutButton" Content="&#xE946;" Style="{StaticResource ToolbarIconButton}"
+                    Foreground="#556CD6"
+                    FontSize="18"
+                    Click="AboutButton_Click" ToolTip="About"/>
         </ToolBar>
+        </ToolBarTray>
 
         <!-- Path Bar -->
         <Grid Grid.Row="2" Height="30" Background="#FAFAFA">

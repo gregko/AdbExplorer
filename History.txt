@@ -1,6 +1,15 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.4.3 - 2025-12-13
+---------------------------
+ChatGPT-5.2 came out recently, so tried I tried it to make the toolbar icons more intuitive 
+and colorful, using that model in GPT's Codex app.
+- Improved toolbar:
+  * Removed Root and Sync folder tree buttons
+  * Refreshed toolbar iconography with clearer, gently colorful icons
+  * Updated "Open current folder in new window" icon styling and stroke weight
+
 Version 1.4.2 - 2025-12-08
 ---------------------------
 - Fixed compatibility with BlueStacks emulator:

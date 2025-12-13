@@ -89,6 +89,30 @@ namespace AdbExplorer
         {
             var selectedDevice = (DeviceTabControl.SelectedItem as TabItem)?.Tag as AndroidDevice;
             var newWindow = new MainWindow(deviceId ?? selectedDevice?.Id, path ?? currentPath);
+
+            // Offset the new window from the current window position
+            // Use typical title bar height (~32 pixels) as the base offset
+            const double titleBarHeight = 32;
+            double verticalOffset = titleBarHeight;
+            double horizontalOffset = titleBarHeight * 1.5; // 1.5x horizontal offset
+
+            // Calculate new position (offset down and to the right)
+            double newLeft = this.Left + horizontalOffset;
+            double newTop = this.Top + verticalOffset;
+
+            // Get screen working area (excludes taskbar)
+            double screenWidth = SystemParameters.WorkArea.Width;
+            double screenHeight = SystemParameters.WorkArea.Height;
+
+            // Check if there's enough room on the screen, otherwise don't offset
+            if (newLeft + this.ActualWidth <= screenWidth &&
+                newTop + this.ActualHeight <= screenHeight)
+            {
+                newWindow.WindowStartupLocation = WindowStartupLocation.Manual;
+                newWindow.Left = newLeft;
+                newWindow.Top = newTop;
+            }
+
             newWindow.Show();
         }
 
