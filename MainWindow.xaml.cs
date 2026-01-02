@@ -3200,137 +3200,7 @@ namespace AdbExplorer
 
         private async void PasteMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                // Check for Windows files first (from Windows Explorer)
-                bool hasWindowsFiles = false;
-                try
-                {
-                    hasWindowsFiles = Clipboard.ContainsFileDropList();
-                }
-                catch (System.Runtime.InteropServices.COMException)
-                {
-                    // Clipboard access error, continue to check other formats
-                }
-
-                if (hasWindowsFiles)
-                {
-                    try
-                    {
-                        var fileDropList = Clipboard.GetFileDropList();
-                        if (fileDropList != null && fileDropList.Count > 0)
-                        {
-                            string[] files = new string[fileDropList.Count];
-                            fileDropList.CopyTo(files, 0);
-
-                            // Use the same handler as drag-and-drop from Windows Explorer
-                            await HandleExternalFileDrop(files, currentPath);
-                            return;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        StatusText.Text = $"Failed to read Windows clipboard files: {ex.Message}";
-                        return;
-                    }
-                }
-
-                // Check for AdbFiles (internal AdbExplorer clipboard)
-                bool hasAdbFiles = false;
-                List<FileItem> items = null;
-
-                try
-                {
-                    hasAdbFiles = Clipboard.ContainsData("AdbFiles");
-                }
-                catch (System.Runtime.InteropServices.COMException)
-                {
-                    // Clipboard data is corrupted or invalid
-                    StatusText.Text = "Clipboard data is invalid or corrupted";
-                    return;
-                }
-
-                if (hasAdbFiles)
-                {
-                    try
-                    {
-                        items = Clipboard.GetData("AdbFiles") as List<FileItem>;
-                    }
-                    catch (System.Runtime.InteropServices.COMException)
-                    {
-                        // Clipboard data is corrupted or invalid
-                        StatusText.Text = "Failed to read clipboard data - data may be corrupted";
-                        return;
-                    }
-
-                    if (items != null)
-                    {
-                        // Use the same logic as HandleInternalDrop for consistency
-                        var result = MessageBox.Show($"Paste {items.Count} item(s) to {currentPath}?", "Paste Files",
-                            MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-                        if (result == MessageBoxResult.Yes)
-                        {
-                            // Prepare copy list
-                            var copyList = new List<(string sourcePath, string destPath)>();
-
-                            foreach (var file in items)
-                            {
-                                string destPath = currentPath == "/"
-                                    ? "/" + file.Name
-                                    : currentPath + "/" + file.Name;
-
-                                if (file.IsDirectory)
-                                {
-                                    // For directories, add as a single operation
-                                    copyList.Add((file.FullPath, destPath));
-                                }
-                                else
-                                {
-                                    copyList.Add((file.FullPath, destPath));
-                                }
-                            }
-
-                            // Use FileTransferManager for batch operations (4+ files) or traditional method for smaller batches
-                            bool success;
-                            if (copyList.Count >= 4)
-                            {
-                                success = await fileTransferManager.CopyFilesOnDeviceAsync(copyList, true);
-                            }
-                            else
-                            {
-                                // Traditional copy for small batches
-                                success = await PasteFilesTraditional(copyList);
-                            }
-
-                            await RefreshCurrentFolder();
-
-                            if (success)
-                            {
-                                StatusText.Text = $"Pasted {copyList.Count} item(s)";
-                            }
-                            else
-                            {
-                                StatusText.Text = "Paste completed with some errors";
-                            }
-                        }
-                        else
-                        {
-                            StatusText.Text = "Paste cancelled";
-                        }
-                    }
-                }
-                else
-                {
-                    StatusText.Text = "No files to paste";
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error during paste operation: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-                StatusText.Text = "Paste operation failed";
-            }
+            await PasteItems();
         }
 
         private async Task<bool> PasteFilesTraditional(List<(string sourcePath, string destPath)> files)
@@ -3980,91 +3850,177 @@ namespace AdbExplorer
         // Add helper method for Paste operation
         private async Task PasteItems()
         {
-            // Check for Windows files first (from Windows Explorer)
-            bool hasWindowsFiles = false;
             try
             {
-                hasWindowsFiles = Clipboard.ContainsFileDropList();
+                await PasteFromClipboardAsync();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error during paste operation: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusText.Text = "Paste operation failed";
+            }
+        }
+
+        private async Task PasteFromClipboardAsync()
+        {
+            if (TryGetClipboardAdbFiles(out var adbFiles))
+            {
+                await PasteAdbFilesAsync(adbFiles);
+                return;
+            }
+
+            if (TryGetClipboardFileDropList(out var files))
+            {
+                await HandleExternalFileDrop(files, currentPath);
+                return;
+            }
+
+            StatusText.Text = "No files to paste";
+        }
+
+        private bool TryGetClipboardAdbFiles(out List<FileItem> items)
+        {
+            items = new List<FileItem>();
+
+            try
+            {
+                if (!Clipboard.ContainsData("AdbFiles"))
+                {
+                    return false;
+                }
             }
             catch (System.Runtime.InteropServices.COMException)
             {
-                // Clipboard access error, continue to check other formats
+                StatusText.Text = "Clipboard data is invalid or corrupted";
+                return false;
             }
 
-            if (hasWindowsFiles)
+            try
             {
-                try
+                items = Clipboard.GetData("AdbFiles") as List<FileItem> ?? new List<FileItem>();
+                if (items.Count == 0)
                 {
-                    var fileDropList = Clipboard.GetFileDropList();
-                    if (fileDropList != null && fileDropList.Count > 0)
-                    {
-                        string[] files = new string[fileDropList.Count];
-                        fileDropList.CopyTo(files, 0);
-
-                        // Use the same handler as drag-and-drop from Windows Explorer
-                        await HandleExternalFileDrop(files, currentPath);
-                        return;
-                    }
+                    return false;
                 }
-                catch (Exception ex)
+
+                return true;
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                StatusText.Text = "Failed to read clipboard data - data may be corrupted";
+                return false;
+            }
+        }
+
+        private bool TryGetClipboardFileDropList(out string[] files)
+        {
+            files = Array.Empty<string>();
+
+            try
+            {
+                if (!Clipboard.ContainsFileDropList())
                 {
-                    StatusText.Text = $"Failed to read Windows clipboard files: {ex.Message}";
+                    return false;
+                }
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                return false;
+            }
+
+            try
+            {
+                var fileDropList = Clipboard.GetFileDropList();
+                if (fileDropList == null || fileDropList.Count == 0)
+                {
+                    return false;
+                }
+
+                files = new string[fileDropList.Count];
+                fileDropList.CopyTo(files, 0);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Failed to read Windows clipboard files: {ex.Message}";
+                return false;
+            }
+        }
+
+        private async Task PasteAdbFilesAsync(List<FileItem> items)
+        {
+            var existingNames = new HashSet<string>(StringComparer.Ordinal);
+            try
+            {
+                var targetFiles = await Task.Run(() => fileSystemService.GetFiles(currentPath));
+                foreach (var targetFile in targetFiles)
+                {
+                    existingNames.Add(targetFile.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Error checking target directory: {ex.Message}";
+                return;
+            }
+
+            var conflicts = items
+                .Where(item => existingNames.Contains(item.Name))
+                .Select(item => item.Name)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (conflicts.Count > 0)
+            {
+                string fileList = conflicts.Count <= 5
+                    ? string.Join("\n", conflicts)
+                    : string.Join("\n", conflicts.Take(5)) + $"\n... and {conflicts.Count - 5} more";
+
+                string message = conflicts.Count == 1
+                    ? $"The following item already exists:\n\n{fileList}\n\nDo you want to overwrite it?"
+                    : $"The following items already exist:\n\n{fileList}\n\nDo you want to overwrite them?";
+
+                var result = MessageBox.Show(message, "Paste Files",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                if (result != MessageBoxResult.Yes)
+                {
+                    StatusText.Text = "Paste cancelled";
                     return;
                 }
             }
 
-            // Check for internal AdbFiles
-            if (Clipboard.ContainsData("AdbFiles"))
+            var copyList = new List<(string sourcePath, string destPath)>();
+
+            foreach (var file in items)
             {
-                var items = Clipboard.GetData("AdbFiles") as List<FileItem>;
-                if (items != null)
-                {
-                    StatusText.Text = $"Pasting {items.Count} item(s)...";
+                string destPath = currentPath == "/"
+                    ? "/" + file.Name
+                    : currentPath + "/" + file.Name;
 
-                    foreach (var item in items)
-                    {
-                        try
-                        {
-                            string destPath = currentPath + "/" + item.Name;
+                copyList.Add((file.FullPath, destPath));
+            }
 
-                            var sourceEscaped = EscapeForShell(item.FullPath);
-                            var destEscaped = EscapeForShell(destPath);
+            bool success;
+            if (copyList.Count >= 4)
+            {
+                success = await fileTransferManager.CopyFilesOnDeviceAsync(copyList, true);
+            }
+            else
+            {
+                success = await PasteFilesTraditional(copyList);
+            }
 
-                            await Task.Run(() =>
-                            {
-                                if (item.IsDirectory)
-                                {
-                                    adbService.ExecuteShellCommand($"cp -r {sourceEscaped} {destEscaped}");
-                                    // Set permissions recursively for directories
-                                    try
-                                    {
-                                        adbService.ExecuteShellCommand($"chmod -R 770 {destEscaped}");
-                                        adbService.ExecuteShellCommand($"find {destEscaped} -type f -exec chmod 660 {{}} \\;");
-                                    }
-                                    catch { /* Ignore permission errors */ }
-                                }
-                                else
-                                {
-                                    adbService.ExecuteShellCommand($"cp {sourceEscaped} {destEscaped}");
-                                    // Set permissions to 660 for copied file
-                                    try
-                                    {
-                                        adbService.ExecuteShellCommand($"chmod 660 {destEscaped}");
-                                    }
-                                    catch { /* Ignore permission errors */ }
-                                }
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show($"Error pasting {item.Name}: {ex.Message}", "Error",
-                                MessageBoxButton.OK, MessageBoxImage.Error);
-                        }
-                    }
+            await RefreshCurrentFolder();
 
-                    await RefreshCurrentFolder();
-                    StatusText.Text = "Paste completed";
-                }
+            if (success)
+            {
+                StatusText.Text = $"Pasted {copyList.Count} item(s)";
+            }
+            else
+            {
+                StatusText.Text = "Paste completed with some errors";
             }
         }
 
