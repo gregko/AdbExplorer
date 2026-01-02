@@ -10,9 +10,9 @@ This phase focuses on adding the visual elements and implementing client-side fi
     - [x] Subtask: Add `TextBox` for search to `MainWindow` or `ExplorerControl`.
     - [x] Subtask: Bind `TextBox` text to `SearchViewModel.SearchQuery`.
     - [x] Subtask: Implement `Ctrl+F` keyboard shortcut to focus the search box.
-- [ ] Task: Implement Filter Logic for File List
-    - [ ] Subtask: Write tests for filtering collection view based on search query.
-    - [ ] Subtask: Update `FileExplorerViewModel` to filter the `FileList` `CollectionView` based on the search query.
+- [x] Task: Implement Filter Logic for File List [aebec2d]
+    - [x] Subtask: Write tests for filtering collection view based on search query.
+    - [x] Subtask: Update `FileExplorerViewModel` to filter the `FileList` `CollectionView` based on the search query.
 - [ ] Task: Conductor - User Manual Verification 'Search UI & Basic Filtering (Current Directory)' (Protocol in workflow.md)
 
 ## Phase 2: Recursive Search Implementation
