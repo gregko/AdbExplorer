@@ -55,6 +55,7 @@ namespace AdbExplorer
         private bool isDeviceRefreshInProgress;
         private bool pendingDeviceRefresh;
         private bool isLoadingRootFolders = false;
+        private bool isForegroundRefreshInProgress;
 
         private SearchViewModel searchViewModel;
         private ICollectionView filesView;
@@ -82,6 +83,8 @@ namespace AdbExplorer
 
             InitializeServices();
             RequestDeviceRefresh(initialDevice, initialPath);
+
+            this.Activated += MainWindow_Activated;
 
             // Add keyboard handler
             this.PreviewKeyDown += Window_PreviewKeyDown;
@@ -158,6 +161,34 @@ namespace AdbExplorer
                 {
                     window.WindowCountText.Text = $"{allWindows.Count} window{(allWindows.Count != 1 ? "s" : "")}";
                 });
+            }
+        }
+
+        private async void MainWindow_Activated(object? sender, EventArgs e)
+        {
+            if (!IsLoaded || isForegroundRefreshInProgress)
+            {
+                return;
+            }
+
+            if (isDeviceRefreshInProgress || isLoadingRootFolders || isSyncingTree || suppressDeviceSelectionHandling)
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(activeDeviceId) || devices.Count == 0 || !devices.Any(d => d.Id == activeDeviceId))
+            {
+                return;
+            }
+
+            isForegroundRefreshInProgress = true;
+            try
+            {
+                await RefreshCurrentFolder();
+            }
+            finally
+            {
+                isForegroundRefreshInProgress = false;
             }
         }
 

@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Implement file name search functionality to locate files and folders by name or substring within the current directory and subdirectories.
+## [~] Track: Implement file name search functionality to locate files and folders by name or substring within the current directory and subdirectories.
 *Link: [./conductor/tracks/search_20260102/](./conductor/tracks/search_20260102/)*

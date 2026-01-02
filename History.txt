@@ -1,6 +1,12 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.4.4 - 2026-01-02
+---------------------------
+- Fixed copy/paste operations
+- Added Search box to the Path row
+- Auto-refreshes file and folder panels when the app regains focus
+
 Version 1.4.3 - 2025-12-13
 ---------------------------
 ChatGPT-5.2 came out recently, so tried I tried it to make the toolbar icons more intuitive 
