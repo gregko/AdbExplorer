@@ -17,6 +17,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Windows.Data;
 
 using AdbExplorer.ViewModels; // Add this
 
@@ -56,6 +57,7 @@ namespace AdbExplorer
         private bool isLoadingRootFolders = false;
 
         private SearchViewModel searchViewModel;
+        private ICollectionView filesView;
 
         // Column sorting state
 
@@ -521,12 +523,24 @@ namespace AdbExplorer
             fileTransferManager = new FileTransferManager(adbService, fileSystemService, this);
             devices = new ObservableCollection<AndroidDevice>();
             currentFiles = new ObservableCollection<FileItem>();
+
+            // Setup filtering
+            filesView = CollectionViewSource.GetDefaultView(currentFiles);
+            filesView.Filter = searchViewModel.Filter;
+            searchViewModel.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(SearchViewModel.SearchQuery))
+                {
+                    filesView.Refresh();
+                }
+            };
+
             rootFolders = new ObservableCollection<FolderNode>();
             navigationHistory = new Stack<string>();
             navigationForward = new Stack<string>();
             tempFileMapping = new Dictionary<string, string>();
 
-            FileListView.ItemsSource = currentFiles;
+            FileListView.ItemsSource = filesView;
             FolderTreeView.ItemsSource = rootFolders;
             
             // Initialize favorites
