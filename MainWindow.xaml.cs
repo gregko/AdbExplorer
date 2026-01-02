@@ -18,6 +18,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
+using AdbExplorer.ViewModels; // Add this
+
 namespace AdbExplorer
 {
     public partial class MainWindow : Window
@@ -53,7 +55,10 @@ namespace AdbExplorer
         private bool pendingDeviceRefresh;
         private bool isLoadingRootFolders = false;
 
+        private SearchViewModel searchViewModel;
+
         // Column sorting state
+
         private string? currentSortColumn = null;
         private bool sortAscending = true;
         private string? previousSortColumn = null;
@@ -176,6 +181,13 @@ namespace AdbExplorer
                 e.Handled = true;
                 System.Diagnostics.Debug.WriteLine("Executing Sync Tree via Ctrl+L");
                 await SyncTreeWithCurrentPath();
+            }
+
+            // Ctrl+F - Focus Search
+            if (e.Key == Key.F && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                SearchBox.Focus();
             }
 
             // Delete key
@@ -501,6 +513,10 @@ namespace AdbExplorer
             adbService = new AdbService();
             adbService.DevicesChanged += AdbService_DevicesChanged;
             adbService.StartDeviceTracking();
+            
+            searchViewModel = new SearchViewModel();
+            SearchBox.DataContext = searchViewModel;
+
             fileSystemService = new FileSystemService(adbService);
             fileTransferManager = new FileTransferManager(adbService, fileSystemService, this);
             devices = new ObservableCollection<AndroidDevice>();

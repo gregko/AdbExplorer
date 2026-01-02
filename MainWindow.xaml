@@ -229,6 +229,7 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="200"/>
             </Grid.ColumnDefinitions>
             <Label Grid.Column="0" Content="Path:" VerticalAlignment="Center" Margin="5,0"/>
             <TextBox Grid.Column="1" Name="PathTextBox"
@@ -237,6 +238,29 @@
                      MouseDoubleClick="PathTextBox_MouseDoubleClick"/>
             <Button Grid.Column="2" Content="Go" Width="40" Margin="5,0"
                     Click="GoButton_Click"/>
+            
+            <Grid Grid.Column="3" Margin="5,0">
+                <TextBox Name="SearchBox" 
+                         VerticalAlignment="Center"
+                         Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock IsHitTestVisible="False" 
+                           Text="Search..." 
+                           VerticalAlignment="Center" 
+                           HorizontalAlignment="Left" 
+                           Margin="5,0,0,0" 
+                           Foreground="Gray">
+                    <TextBlock.Style>
+                        <Style TargetType="{x:Type TextBlock}">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
         </Grid>
 
         <!-- Main Content Area -->
