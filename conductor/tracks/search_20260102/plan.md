@@ -6,10 +6,10 @@ This phase focuses on adding the visual elements and implementing client-side fi
 - [x] Task: Create `SearchViewModel` (or equivalent) and basic search properties [ae91cd3]
     - [x] Subtask: Write tests for `SearchViewModel` logic (query update, filter predicate).
     - [x] Subtask: Implement `SearchViewModel` with `SearchQuery` property and `IsRecursive` toggle.
-- [ ] Task: Integrate Search Bar into UI
-    - [ ] Subtask: Add `TextBox` for search to `MainWindow` or `ExplorerControl`.
-    - [ ] Subtask: Bind `TextBox` text to `SearchViewModel.SearchQuery`.
-    - [ ] Subtask: Implement `Ctrl+F` keyboard shortcut to focus the search box.
+- [x] Task: Integrate Search Bar into UI [b745206]
+    - [x] Subtask: Add `TextBox` for search to `MainWindow` or `ExplorerControl`.
+    - [x] Subtask: Bind `TextBox` text to `SearchViewModel.SearchQuery`.
+    - [x] Subtask: Implement `Ctrl+F` keyboard shortcut to focus the search box.
 - [ ] Task: Implement Filter Logic for File List
     - [ ] Subtask: Write tests for filtering collection view based on search query.
     - [ ] Subtask: Update `FileExplorerViewModel` to filter the `FileList` `CollectionView` based on the search query.
