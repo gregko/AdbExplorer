@@ -3,9 +3,9 @@
 ## Phase 1: Search UI & Basic Filtering (Current Directory)
 This phase focuses on adding the visual elements and implementing client-side filtering for files already loaded in the current view.
 
-- [ ] Task: Create `SearchViewModel` (or equivalent) and basic search properties
-    - [ ] Subtask: Write tests for `SearchViewModel` logic (query update, filter predicate).
-    - [ ] Subtask: Implement `SearchViewModel` with `SearchQuery` property and `IsRecursive` toggle.
+- [x] Task: Create `SearchViewModel` (or equivalent) and basic search properties [ae91cd3]
+    - [x] Subtask: Write tests for `SearchViewModel` logic (query update, filter predicate).
+    - [x] Subtask: Implement `SearchViewModel` with `SearchQuery` property and `IsRecursive` toggle.
 - [ ] Task: Integrate Search Bar into UI
     - [ ] Subtask: Add `TextBox` for search to `MainWindow` or `ExplorerControl`.
     - [ ] Subtask: Bind `TextBox` text to `SearchViewModel.SearchQuery`.
