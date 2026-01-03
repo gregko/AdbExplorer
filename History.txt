@@ -1,6 +1,11 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.4.5 - 2026-01-03
+---------------------------
+- Added adb push fallback to /data/local/tmp + mv when fchown fails on Android/data paths
+- Fix ownership bug when creating folders in Android/data
+
 Version 1.4.4 - 2026-01-02
 ---------------------------
 - Fixed copy/paste operations

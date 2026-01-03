@@ -484,16 +484,10 @@ namespace AdbExplorer.Services
             // Use single quotes for paths with special characters in rm, cp, mv commands
             var escapedPath = EscapePathForShell(path);
             adbService.ExecuteShellCommand($"mkdir -p {escapedPath}");
-            
-            // Set directory permissions to 770 (drwxrwx---)
-            try
-            {
-                adbService.ExecuteShellCommand($"chmod 770 {escapedPath}");
-            }
-            catch
-            {
-                // Ignore permission errors, some paths may not allow chmod
-            }
+            // Note: We intentionally don't chmod the directory after creation.
+            // On Android's FUSE filesystem (especially /sdcard/Android/data/),
+            // changing permissions can break subsequent adb push operations
+            // by causing "remote fchown failed: Operation not permitted" errors.
         }
 
         public void DeleteItem(string path)

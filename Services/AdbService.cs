@@ -14,6 +14,7 @@ namespace AdbExplorer.Services
     {
         private string adbPath = "adb";
         private string? currentDeviceId;
+        private readonly HashSet<string> pushMoveWorkaroundDevices = new HashSet<string>(StringComparer.Ordinal);
         private CancellationTokenSource? deviceTrackerCts;
         private Task? deviceTrackerTask;
         private Process? deviceTrackerProcess;
@@ -393,36 +394,31 @@ namespace AdbExplorer.Services
             if (!System.IO.File.Exists(localPath) && !System.IO.Directory.Exists(localPath))
                 throw new System.IO.FileNotFoundException($"Local file not found: {localPath}");
 
-            var process = new Process
+            if (RequiresPushMoveWorkaround())
             {
-                StartInfo = new ProcessStartInfo
+                if (!TryPushViaTempMove(localPath, remotePath, setPermissions, null, CancellationToken.None, 0, out string? workaroundError))
                 {
-                    FileName = adbPath,
-                    Arguments = $"-s {currentDeviceId} push \"{localPath}\" \"{remotePath}\"",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    StandardOutputEncoding = Encoding.UTF8
+                    throw new Exception($"ADB push failed (workaround): {workaroundError ?? "Unknown error"}");
                 }
-            };
+                return;
+            }
 
-            process.Start();
-            string output = process.StandardOutput.ReadToEnd();
-            string error = process.StandardError.ReadToEnd();
-            process.WaitForExit();
+            var result = RunAdbPush(localPath, remotePath);
+            bool hasFchownError = IsFchownPermissionError(result.Error);
+            if (hasFchownError)
+            {
+                MarkPushMoveWorkaround();
+                if (!TryPushViaTempMove(localPath, remotePath, setPermissions, null, CancellationToken.None, 0, out string? workaroundError))
+                {
+                    throw new Exception($"ADB push failed (workaround): {workaroundError ?? "Unknown error"}");
+                }
+                return;
+            }
 
-            // Check if push actually failed or if it's just a non-critical error
-            // "fchown failed" and "remote fchown failed" are non-critical - the file was still pushed
-            bool isRealError = process.ExitCode != 0 && 
-                              !string.IsNullOrEmpty(error) && 
-                              !error.Contains("Warning") &&
-                              !error.Contains("1 file pushed") && // If it says file pushed, it succeeded
-                              !error.Contains("fchown failed"); // fchown errors are non-critical
-            
+            bool isRealError = IsPushError(result.ExitCode, result.Error, allowFchownWarning: true);
             if (isRealError)
             {
-                throw new Exception($"ADB push failed: {error}");
+                throw new Exception($"ADB push failed: {result.Error}");
             }
 
             // Set permissions to 660 (-rw-rw----) after pushing the file
@@ -542,20 +538,6 @@ namespace AdbExplorer.Services
 
             try
             {
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = adbPath,
-                        Arguments = $"-s {currentDeviceId} push \"{localPath}\" \"{remotePath}\"",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        StandardOutputEncoding = Encoding.UTF8
-                    }
-                };
-
                 // Get source file size
                 long totalSize = 0;
                 if (System.IO.File.Exists(localPath))
@@ -568,47 +550,40 @@ namespace AdbExplorer.Services
                     totalSize = GetDirectorySize(new System.IO.DirectoryInfo(localPath));
                 }
 
-                process.Start();
-
-                // Parse progress from adb output
-                Task progressTask = Task.Run(async () =>
+                if (RequiresPushMoveWorkaround())
                 {
-                    string line;
-                    var reader = process.StandardOutput;
-                    while ((line = await reader.ReadLineAsync()) != null && !cancellationToken.IsCancellationRequested)
+                    if (!TryPushViaTempMove(localPath, remotePath, setPermissions, progress, cancellationToken, totalSize, out string? workaroundError))
                     {
-                        // ADB push output format: "[percentage]% [transferred]/[total]"
-                        // Example: "[ 45%] /data/local/tmp/file.txt"
-                        if (line.Contains("%"))
-                        {
-                            var match = System.Text.RegularExpressions.Regex.Match(line, @"\[\s*(\d+)%\]");
-                            if (match.Success && int.TryParse(match.Groups[1].Value, out int percentage))
-                            {
-                                long bytesTransferred = (totalSize * percentage) / 100;
-                                progress?.Report(bytesTransferred);
-                            }
-                        }
+                        System.Diagnostics.Debug.WriteLine($"ADB push workaround failed: {workaroundError}");
+                        return false;
                     }
-                });
 
-                string error = process.StandardError.ReadToEnd();
+                    progress?.Report(totalSize);
+                    return true;
+                }
 
-                if (cancellationToken.IsCancellationRequested)
+                var result = RunAdbPushWithProgress(localPath, remotePath, progress, cancellationToken, totalSize);
+                if (result.Canceled)
                 {
-                    try { process.Kill(); } catch { }
                     return false;
                 }
 
-                process.WaitForExit();
-                progressTask.Wait(1000);
+                bool hasFchownError = IsFchownPermissionError(result.Error);
+                if (hasFchownError)
+                {
+                    MarkPushMoveWorkaround();
+                    progress?.Report(0);
+                    if (!TryPushViaTempMove(localPath, remotePath, setPermissions, progress, cancellationToken, totalSize, out string? workaroundError))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"ADB push workaround failed: {workaroundError}");
+                        return false;
+                    }
 
-                // Check if push actually failed
-                bool isRealError = process.ExitCode != 0 &&
-                                  !string.IsNullOrEmpty(error) &&
-                                  !error.Contains("Warning") &&
-                                  !error.Contains("1 file pushed") &&
-                                  !error.Contains("fchown failed");
+                    progress?.Report(totalSize);
+                    return true;
+                }
 
+                bool isRealError = IsPushError(result.ExitCode, result.Error, allowFchownWarning: true);
                 if (isRealError)
                 {
                     return false;
@@ -634,6 +609,263 @@ namespace AdbExplorer.Services
                 System.Diagnostics.Debug.WriteLine($"Exception pushing file with progress {localPath}: {ex.Message}");
                 throw;
             }
+        }
+
+        private bool RequiresPushMoveWorkaround()
+        {
+            return !string.IsNullOrEmpty(currentDeviceId) && pushMoveWorkaroundDevices.Contains(currentDeviceId);
+        }
+
+        private void MarkPushMoveWorkaround()
+        {
+            if (!string.IsNullOrEmpty(currentDeviceId))
+            {
+                pushMoveWorkaroundDevices.Add(currentDeviceId);
+            }
+        }
+
+        private static bool IsFchownPermissionError(string error)
+        {
+            if (string.IsNullOrWhiteSpace(error))
+                return false;
+
+            return error.Contains("remote fchown failed", StringComparison.OrdinalIgnoreCase) ||
+                   error.Contains("fchown failed: Operation not permitted", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsPushError(int exitCode, string error, bool allowFchownWarning)
+        {
+            if (exitCode == 0)
+                return false;
+
+            if (string.IsNullOrEmpty(error))
+                return false;
+
+            if (error.Contains("Warning", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (error.Contains("1 file pushed", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (allowFchownWarning && error.Contains("fchown failed", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return true;
+        }
+
+        private static bool HasShellCommandError(string output)
+        {
+            if (string.IsNullOrWhiteSpace(output))
+                return false;
+
+            return output.Contains("No such", StringComparison.OrdinalIgnoreCase) ||
+                   output.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
+                   output.Contains("cannot", StringComparison.OrdinalIgnoreCase) ||
+                   output.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+                   output.Contains("permission denied", StringComparison.OrdinalIgnoreCase) ||
+                   output.Contains("not permitted", StringComparison.OrdinalIgnoreCase) ||
+                   output.Contains("error", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool TryPushViaTempMove(string localPath, string remotePath, bool setPermissions, IProgress<long>? progress, CancellationToken cancellationToken, long totalSize, out string? errorMessage)
+        {
+            errorMessage = null;
+            string tempPath = GetTempRemotePath();
+            bool localIsDirectory = System.IO.Directory.Exists(localPath);
+            string destinationPath = ResolveDestinationPath(localPath, remotePath);
+
+            if (progress == null)
+            {
+                var result = RunAdbPush(localPath, tempPath);
+                if (IsPushError(result.ExitCode, result.Error, allowFchownWarning: false))
+                {
+                    errorMessage = result.Error;
+                    return false;
+                }
+            }
+            else
+            {
+                var result = RunAdbPushWithProgress(localPath, tempPath, progress, cancellationToken, totalSize);
+                if (result.Canceled)
+                {
+                    errorMessage = "Canceled";
+                    return false;
+                }
+
+                if (IsPushError(result.ExitCode, result.Error, allowFchownWarning: false))
+                {
+                    errorMessage = result.Error;
+                    return false;
+                }
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                errorMessage = "Canceled";
+                return false;
+            }
+
+            if (localIsDirectory && IsRemoteDirectory(destinationPath))
+            {
+                string copyResult = ExecuteShellCommand($"cp -r \"{tempPath}/.\" \"{destinationPath}/\" 2>&1");
+                if (HasShellCommandError(copyResult))
+                {
+                    errorMessage = copyResult;
+                    TryDeleteRemotePath(tempPath);
+                    return false;
+                }
+
+                TryDeleteRemotePath(tempPath);
+            }
+            else
+            {
+                string moveResult = ExecuteShellCommand($"mv -f \"{tempPath}\" \"{destinationPath}\" 2>&1");
+                if (HasShellCommandError(moveResult))
+                {
+                    errorMessage = moveResult;
+                    TryDeleteRemotePath(tempPath);
+                    return false;
+                }
+            }
+
+            if (setPermissions)
+            {
+                try
+                {
+                    ExecuteShellCommand($"chmod 660 \"{destinationPath}\"");
+                }
+                catch
+                {
+                }
+            }
+
+            return true;
+        }
+
+        private void TryDeleteRemotePath(string remotePath)
+        {
+            try
+            {
+                ExecuteShellCommand($"rm -rf \"{remotePath}\"");
+            }
+            catch
+            {
+            }
+        }
+
+        private string GetTempRemotePath()
+        {
+            return $"/data/local/tmp/AdbExplorer_{Guid.NewGuid():N}";
+        }
+
+        private string ResolveDestinationPath(string localPath, string remotePath)
+        {
+            bool remoteIsDirectory = IsRemoteDirectory(remotePath) || remotePath.EndsWith("/", StringComparison.Ordinal);
+            if (!remoteIsDirectory)
+                return remotePath;
+
+            string baseName = GetLocalBaseName(localPath);
+            if (remotePath.EndsWith("/", StringComparison.Ordinal))
+                return remotePath + baseName;
+
+            return remotePath + "/" + baseName;
+        }
+
+        private string GetLocalBaseName(string localPath)
+        {
+            string trimmed = System.IO.Path.TrimEndingDirectorySeparator(localPath);
+            string name = System.IO.Path.GetFileName(trimmed);
+            return string.IsNullOrEmpty(name) ? "payload" : name;
+        }
+
+        private bool IsRemoteDirectory(string remotePath)
+        {
+            try
+            {
+                string result = ExecuteShellCommand($"test -d \"{remotePath}\" && echo dir");
+                return result.Trim().Equals("dir", StringComparison.Ordinal);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private (int ExitCode, string Error) RunAdbPush(string localPath, string remotePath)
+        {
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = adbPath,
+                    Arguments = $"-s {currentDeviceId} push \"{localPath}\" \"{remotePath}\"",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = Encoding.UTF8
+                }
+            };
+
+            process.Start();
+            _ = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            return (process.ExitCode, error);
+        }
+
+        private (int ExitCode, string Error, bool Canceled) RunAdbPushWithProgress(string localPath, string remotePath, IProgress<long>? progress, CancellationToken cancellationToken, long totalSize)
+        {
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = adbPath,
+                    Arguments = $"-s {currentDeviceId} push \"{localPath}\" \"{remotePath}\"",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = Encoding.UTF8
+                }
+            };
+
+            process.Start();
+
+            Task progressTask = Task.Run(async () =>
+            {
+                string line;
+                var reader = process.StandardOutput;
+                while ((line = await reader.ReadLineAsync()) != null && !cancellationToken.IsCancellationRequested)
+                {
+                    // ADB push output format: "[percentage]% [transferred]/[total]"
+                    // Example: "[ 45%] /data/local/tmp/file.txt"
+                    if (line.Contains("%"))
+                    {
+                        var match = Regex.Match(line, @"\[\s*(\d+)%\]");
+                        if (match.Success && int.TryParse(match.Groups[1].Value, out int percentage))
+                        {
+                            long bytesTransferred = (totalSize * percentage) / 100;
+                            progress?.Report(bytesTransferred);
+                        }
+                    }
+                }
+            });
+
+            string error = process.StandardError.ReadToEnd();
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                try { process.Kill(); } catch { }
+                int exitCode = process.HasExited ? process.ExitCode : -1;
+                return (exitCode, error, true);
+            }
+
+            process.WaitForExit();
+            progressTask.Wait(1000);
+
+            return (process.ExitCode, error, false);
         }
 
         private long GetDirectorySize(System.IO.DirectoryInfo directory)
