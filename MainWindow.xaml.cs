@@ -56,6 +56,7 @@ namespace AdbExplorer
         private bool pendingDeviceRefresh;
         private bool isLoadingRootFolders = false;
         private bool isForegroundRefreshInProgress;
+        private const string ClipboardSourceDeviceIdFormat = "AdbExplorerSourceDeviceId";
 
         private SearchViewModel searchViewModel;
         private ICollectionView filesView;
@@ -1421,6 +1422,11 @@ namespace AdbExplorer
         {
             // Check if we're clicking on a column header or gripper
             var hitTest = e.OriginalSource as DependencyObject;
+
+            if (!FileListView.IsKeyboardFocusWithin)
+            {
+                FileListView.Focus();
+            }
 
             // Don't start drag if clicking on header elements
             if (IsHeaderElement(hitTest))
@@ -3120,8 +3126,7 @@ namespace AdbExplorer
                 var selectedItems = FileListView.SelectedItems.Cast<FileItem>().ToList();
                 if (selectedItems.Count > 0)
                 {
-                    // Always set AdbFiles for internal paste operations
-                    Clipboard.SetData("AdbFiles", selectedItems);
+                    SetClipboardAdbFiles(selectedItems);
 
                     // For external paste (to Windows Explorer), prepare actual files
                     await PrepareFilesForWindowsClipboard(selectedItems);
@@ -3247,6 +3252,10 @@ namespace AdbExplorer
                     if (Clipboard.ContainsData("AdbFiles"))
                     {
                         dataObject.SetData("AdbFiles", Clipboard.GetData("AdbFiles"));
+                    }
+                    if (Clipboard.ContainsData(ClipboardSourceDeviceIdFormat))
+                    {
+                        dataObject.SetData(ClipboardSourceDeviceIdFormat, Clipboard.GetData(ClipboardSourceDeviceIdFormat));
                     }
 
                     // Set the clipboard
@@ -3898,8 +3907,7 @@ namespace AdbExplorer
             var selectedItems = FileListView.SelectedItems.Cast<FileItem>().ToList();
             if (selectedItems.Count > 0)
             {
-                // Always set AdbFiles for internal paste operations
-                Clipboard.SetData("AdbFiles", selectedItems);
+                SetClipboardAdbFiles(selectedItems);
 
                 // For external paste (to Windows Explorer), prepare actual files
                 await PrepareFilesForWindowsClipboard(selectedItems);
@@ -3925,8 +3933,25 @@ namespace AdbExplorer
 
         private async Task PasteFromClipboardAsync()
         {
+            string? sourceDeviceId = TryGetClipboardSourceDeviceId();
+            bool isCrossDevice = !string.IsNullOrEmpty(sourceDeviceId) &&
+                                 !string.Equals(sourceDeviceId, activeDeviceId, StringComparison.Ordinal);
+
             if (TryGetClipboardAdbFiles(out var adbFiles))
             {
+                if (isCrossDevice)
+                {
+                    if (TryGetClipboardFileDropList(out var clipboardFiles))
+                    {
+                        await HandleExternalFileDrop(clipboardFiles, currentPath);
+                    }
+                    else
+                    {
+                        StatusText.Text = "Clipboard files are still being prepared. Try again in a moment.";
+                    }
+                    return;
+                }
+
                 await PasteAdbFilesAsync(adbFiles);
                 return;
             }
@@ -3971,6 +3996,43 @@ namespace AdbExplorer
             {
                 StatusText.Text = "Failed to read clipboard data - data may be corrupted";
                 return false;
+            }
+        }
+
+        private void SetClipboardAdbFiles(List<FileItem> selectedItems)
+        {
+            var dataObject = new DataObject();
+            dataObject.SetData("AdbFiles", selectedItems);
+
+            if (!string.IsNullOrEmpty(activeDeviceId))
+            {
+                dataObject.SetData(ClipboardSourceDeviceIdFormat, activeDeviceId);
+            }
+
+            Clipboard.SetDataObject(dataObject, true);
+        }
+
+        private string? TryGetClipboardSourceDeviceId()
+        {
+            try
+            {
+                if (!Clipboard.ContainsData(ClipboardSourceDeviceIdFormat))
+                {
+                    return null;
+                }
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                return null;
+            }
+
+            try
+            {
+                return Clipboard.GetData(ClipboardSourceDeviceIdFormat) as string;
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                return null;
             }
         }
 

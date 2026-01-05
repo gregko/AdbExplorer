@@ -1,6 +1,12 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.4.6 - 2026-01-05
+---------------------------
+- Fixed copy/paste between device tabs by routing cross-device pastes through upload logic
+- Ensured clipboard data preserves internal paste payloads alongside Windows file drops
+- Fixed intermittent Ctrl+V paste failures by focusing the file list on mouse clicks
+
 Version 1.4.5 - 2026-01-03
 ---------------------------
 - Added adb push fallback to /data/local/tmp + mv when fchown fails on Android/data paths
