@@ -102,6 +102,51 @@
                     <Setter Property="HorizontalAlignment" Value="Center"/>
                     <Setter Property="VerticalAlignment" Value="Center"/>
                 </Style>
+
+                <Style x:Key="ToolbarIconToggleButton" TargetType="ToggleButton">
+                    <Setter Property="Width" Value="34"/>
+                    <Setter Property="Height" Value="30"/>
+                    <Setter Property="Margin" Value="2,0"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="FontFamily" Value="{StaticResource ToolbarIconFont}"/>
+                    <Setter Property="FontSize" Value="16"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="BorderBrush" Value="Transparent"/>
+                    <Setter Property="BorderThickness" Value="1"/>
+                    <Setter Property="Foreground" Value="#9AA0A6"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ToggleButton">
+                                <Border x:Name="Border"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="4">
+                                    <ContentPresenter HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsChecked" Value="True">
+                                        <Setter TargetName="Border" Property="Background" Value="#22FF6600"/>
+                                        <Setter TargetName="Border" Property="BorderBrush" Value="#44FF6600"/>
+                                        <Setter Property="Foreground" Value="#CC4400"/>
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Border" Property="Background" Value="#120078D4"/>
+                                        <Setter TargetName="Border" Property="BorderBrush" Value="#330078D4"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter TargetName="Border" Property="Background" Value="#220078D4"/>
+                                        <Setter TargetName="Border" Property="BorderBrush" Value="#550078D4"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Foreground" Value="#C0C0C0"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
             </ToolBar.Resources>
 
             <Button Name="BackButton" Content="&#xE72B;" Style="{StaticResource ToolbarIconButton}"
@@ -211,6 +256,12 @@
                     FontSize="18"
                     Click="DeleteButton_Click" ToolTip="Delete"/>
             <Separator/>
+            <Button Name="AppDrawerButton" Content="&#xE71D;" Style="{StaticResource ToolbarIconButton}"
+                    Foreground="#2E7D32"
+                    FontSize="18"
+                    Click="AppDrawerButton_Click" ToolTip="App Drawer (WSA)"
+                    Visibility="Collapsed"/>
+            <Separator Name="AppDrawerSeparator" Visibility="Collapsed"/>
             <Button Name="HelpButton" Content="&#xE897;" Style="{StaticResource ToolbarIconButton}"
                     Foreground="#556CD6"
                     FontWeight="Bold"
@@ -220,6 +271,13 @@
                     Foreground="#556CD6"
                     FontSize="18"
                     Click="AboutButton_Click" ToolTip="About"/>
+            <Separator/>
+            <ToggleButton Name="RootToggleButton" Content="&#xE7EF;"
+                          Style="{StaticResource ToolbarIconToggleButton}"
+                          FontSize="18"
+                          IsEnabled="False"
+                          Click="RootToggleButton_Click"
+                          ToolTip="Root Mode (device not rooted)"/>
         </ToolBar>
         </ToolBarTray>
 
@@ -418,6 +476,15 @@
                 <TextBlock Name="StatusText" Text="Ready"/>
             </StatusBarItem>
             <Separator/>
+            <StatusBarItem Name="RootStatusItem" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE7EF;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                               Foreground="#CC4400" Margin="0,0,3,0" VerticalAlignment="Center"/>
+                    <TextBlock Name="RootStatusText" Text="ROOT" Foreground="#CC4400"
+                               FontWeight="Bold" VerticalAlignment="Center"/>
+                </StackPanel>
+            </StatusBarItem>
+            <Separator Name="RootStatusSeparator" Visibility="Collapsed"/>
             <StatusBarItem>
                 <TextBlock Name="ItemCountText" Text="0 items"/>
             </StatusBarItem>

@@ -563,16 +563,25 @@ namespace AdbExplorer.Services
 
         public bool PullFile(string remotePath, string localPath)
         {
+            if (adbService.IsRootMode)
+            {
+                return adbService.PullFileAsRoot(remotePath, localPath);
+            }
             return adbService.PullFile(remotePath, localPath);
         }
 
         public void PushFile(string localPath, string remotePath)
         {
-            adbService.PushFile(localPath, remotePath, true);
+            PushFile(localPath, remotePath, true);
         }
 
         public void PushFile(string localPath, string remotePath, bool setPermissions)
         {
+            if (adbService.IsRootMode)
+            {
+                adbService.PushFileAsRoot(localPath, remotePath, setPermissions);
+                return;
+            }
             adbService.PushFile(localPath, remotePath, setPermissions);
         }
 

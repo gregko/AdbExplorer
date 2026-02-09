@@ -58,6 +58,8 @@ namespace AdbExplorer
         private bool isForegroundRefreshInProgress;
         private const string ClipboardSourceDeviceIdFormat = "AdbExplorerSourceDeviceId";
 
+        private bool isDeviceRooted = false;
+
         private SearchViewModel searchViewModel;
         private ICollectionView filesView;
 
@@ -845,6 +847,33 @@ namespace AdbExplorer
 
             adbService.SetCurrentDevice(device.Id);
             activeDeviceId = device.Id;
+
+            // Check if device is rooted (runs su -c id with timeout)
+            StatusText.Text = "Checking root access...";
+            isDeviceRooted = await Task.Run(() => adbService.CheckDeviceRooted());
+            device.IsRooted = isDeviceRooted;
+
+            // Restore root mode preference for this device
+            if (isDeviceRooted && settings.IsRootModeEnabled(device.Id))
+            {
+                adbService.IsRootMode = true;
+                RootToggleButton.IsChecked = true;
+            }
+            else
+            {
+                adbService.IsRootMode = false;
+                RootToggleButton.IsChecked = false;
+            }
+            UpdateRootToggleUI();
+
+            // Show App Drawer button if this is a WSA device
+            bool isWsa = await Task.Run(() =>
+            {
+                string hw = adbService.ExecuteShellCommand("getprop ro.hardware").Trim();
+                return hw.StartsWith("windows", StringComparison.OrdinalIgnoreCase);
+            });
+            AppDrawerButton.Visibility = isWsa ? Visibility.Visible : Visibility.Collapsed;
+            AppDrawerSeparator.Visibility = isWsa ? Visibility.Visible : Visibility.Collapsed;
 
             await LoadRootFolders();
 
@@ -3589,6 +3618,44 @@ namespace AdbExplorer
             var aboutDialog = new AboutDialog();
             aboutDialog.Owner = this;
             aboutDialog.ShowDialog();
+        }
+
+        private void AppDrawerButton_Click(object sender, RoutedEventArgs e)
+        {
+            var drawer = new AppDrawerWindow();
+            drawer.Owner = this;
+            drawer.Show();
+        }
+
+        private async void RootToggleButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!isDeviceRooted || string.IsNullOrEmpty(activeDeviceId))
+            {
+                RootToggleButton.IsChecked = false;
+                return;
+            }
+
+            bool enable = RootToggleButton.IsChecked == true;
+            adbService.IsRootMode = enable;
+            settings.SetRootMode(activeDeviceId, enable);
+
+            UpdateRootToggleUI();
+
+            // Refresh the folder tree and current directory to show newly accessible content
+            await LoadRootFolders();
+            await NavigateToPath(currentPath);
+        }
+
+        private void UpdateRootToggleUI()
+        {
+            RootToggleButton.IsEnabled = isDeviceRooted;
+            RootToggleButton.ToolTip = isDeviceRooted
+                ? (adbService.IsRootMode ? "Root Mode: ON (click to disable)" : "Root Mode: OFF (click to enable)")
+                : "Root Mode (device not rooted)";
+
+            // Status bar indicator
+            RootStatusItem.Visibility = adbService.IsRootMode ? Visibility.Visible : Visibility.Collapsed;
+            RootStatusSeparator.Visibility = adbService.IsRootMode ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void LoadFavorites()

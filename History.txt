@@ -1,6 +1,33 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.5.0 - 2026-02-09
+---------------------------
+- Added App Drawer for Windows Subsystem for Android (WSA)
+  * New toolbar button (visible only when connected to a WSA device)
+  * Shows all installed Android apps with names and icons from Windows registry
+  * Single click launches an app via WsaClient.exe
+  * Long press shows context menu: Launch, App Info, App Settings, Uninstall
+  * Drag app icons to Windows desktop to create launch shortcuts
+  * Filter/search apps by name or package name
+  * "Show system apps" toggle
+  * WSA detection via adb getprop ro.hardware
+- Command-line support for WSA apps:
+  * AdbExplorer.exe -apps  (opens App Drawer standalone)
+  * AdbExplorer.exe -launch <package>  (launches an app and exits)
+
+Version 1.4.7 - 2026-02-06
+---------------------------
+- Added root mode for rooted devices and emulators
+  * Toggle button in toolbar (shield icon) to enable/disable root mode
+  * Auto-detects root access (su) when a device is connected
+  * Browse restricted directories like /data, /system, /vendor
+  * File operations (copy, move, delete, create folder) work in restricted paths
+  * Copy and drag files from restricted directories to Windows
+  * Push/pull to restricted paths via /data/local/tmp staging with su
+  * Root mode preference persisted per device across app restarts
+  * Status bar shows ROOT indicator when root mode is active
+
 Version 1.4.6 - 2026-01-05
 ---------------------------
 - Fixed copy/paste between device tabs by routing cross-device pastes through upload logic

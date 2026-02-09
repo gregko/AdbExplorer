@@ -27,6 +27,27 @@ namespace AdbExplorer
         public string? PreviousSortColumn { get; set; }
         public bool PreviousSortAscending { get; set; } = true;
 
+        // App Drawer window
+        public int AppDrawerWidth { get; set; } = 800;
+        public int AppDrawerHeight { get; set; } = 600;
+        public double AppDrawerLeft { get; set; } = double.NaN;
+        public double AppDrawerTop { get; set; } = double.NaN;
+        public bool AppDrawerShowSystemApps { get; set; } = false;
+
+        // Per-device root mode preferences (device ID -> enabled)
+        public Dictionary<string, bool> RootModePerDevice { get; set; } = new Dictionary<string, bool>();
+
+        public bool IsRootModeEnabled(string deviceId)
+        {
+            return RootModePerDevice.TryGetValue(deviceId, out bool enabled) && enabled;
+        }
+
+        public void SetRootMode(string deviceId, bool enabled)
+        {
+            RootModePerDevice[deviceId] = enabled;
+            Save();
+        }
+
         public static Settings Load()
         {
             try

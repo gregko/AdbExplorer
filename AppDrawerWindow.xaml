@@ -1,0 +1,160 @@
+<Window x:Class="AdbExplorer.AppDrawerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="App Drawer - ADB Explorer"
+        Height="600" Width="800"
+        MinHeight="300" MinWidth="400"
+        WindowStartupLocation="CenterScreen">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="25"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#F0F0F0" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1"
+                Padding="10,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Name="DeviceLabel" Text="Device"
+                           VerticalAlignment="Center" FontWeight="SemiBold"
+                           Foreground="#333" FontSize="13" Margin="0,0,15,0"/>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,10,0">
+                    <CheckBox Name="ShowSystemAppsCheckBox" Content="Show system apps"
+                              VerticalAlignment="Center"
+                              Unchecked="ShowSystemAppsCheckBox_Changed"
+                              Checked="ShowSystemAppsCheckBox_Changed"/>
+                </StackPanel>
+
+                <Grid Grid.Column="3">
+                    <TextBox Name="FilterTextBox" VerticalAlignment="Center"
+                             TextChanged="FilterTextBox_TextChanged"/>
+                    <TextBlock IsHitTestVisible="False" Text="Filter apps..."
+                               VerticalAlignment="Center" Margin="6,0,0,0"
+                               Foreground="Gray" FontStyle="Italic">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=FilterTextBox}" Value="">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+
+                <Button Grid.Column="4" Content="&#xE72C;" ToolTip="Refresh"
+                        Width="30" Height="26" Margin="8,0,0,0"
+                        FontFamily="Segoe MDL2 Assets" FontSize="14"
+                        Background="Transparent" BorderBrush="#CCC"
+                        Click="RefreshButton_Click"/>
+            </Grid>
+        </Border>
+
+        <!-- App Grid -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Background="White">
+            <ItemsControl Name="AppGrid">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Width="90" Height="100" Margin="4" CornerRadius="6"
+                                Background="Transparent" BorderBrush="Transparent" BorderThickness="1"
+                                Cursor="Hand"
+                                MouseLeftButtonDown="AppItem_MouseLeftButtonDown"
+                                MouseLeftButtonUp="AppItem_MouseLeftButtonUp"
+                                MouseMove="AppItem_MouseMove"
+                                MouseLeave="AppItem_MouseLeave"
+                                ToolTip="{Binding PackageName}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#10000000"/>
+                                            <Setter Property="BorderBrush" Value="#20000000"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <!-- App icon or default -->
+                                <Grid Width="48" Height="48" Margin="0,4,0,4">
+                                    <!-- Default icon (hidden when real icon loads) -->
+                                    <TextBlock Text="&#xE71D;" FontFamily="Segoe MDL2 Assets"
+                                               FontSize="32" Foreground="#888"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <!-- Default: Collapsed (assumes icon exists) -->
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <!-- Show emoji when Icon is null -->
+                                                    <DataTrigger Binding="{Binding Icon}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <!-- Actual icon (shown when Icon is not null) -->
+                                    <Image Source="{Binding Icon}" Width="48" Height="48"
+                                           Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality">
+                                        <Image.Style>
+                                            <Style TargetType="Image">
+                                                <!-- Default: Visible (assumes icon exists) -->
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <!-- Hide image when Icon is null -->
+                                                    <DataTrigger Binding="{Binding Icon}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Image.Style>
+                                    </Image>
+                                </Grid>
+                                <TextBlock Text="{Binding Label}" TextAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                                           MaxWidth="84" FontSize="11" Foreground="#333"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Loading overlay -->
+        <Border Grid.Row="1" Name="LoadingOverlay" Background="#80FFFFFF"
+                Visibility="Visible">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="Loading apps..." FontSize="16" Foreground="#666"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Status Bar -->
+        <StatusBar Grid.Row="2" Background="#F5F5F5">
+            <TextBlock Name="StatusText" Text="Loading..." FontSize="11"/>
+        </StatusBar>
+    </Grid>
+</Window>

@@ -331,9 +331,11 @@ namespace AdbExplorer.Services
                 }));
             });
 
-            // Call enhanced PushFile with progress
+            // Call enhanced PushFile with progress (use root-aware variant when root mode is on)
             return await Task.Run(() =>
-                _adbService.PushFileWithProgress(operation.SourcePath, operation.DestinationPath, progressCallback, _cancellationTokenSource.Token));
+                _adbService.IsRootMode
+                    ? _adbService.PushFileAsRootWithProgress(operation.SourcePath, operation.DestinationPath, progressCallback, _cancellationTokenSource.Token, true)
+                    : _adbService.PushFileWithProgress(operation.SourcePath, operation.DestinationPath, progressCallback, _cancellationTokenSource.Token));
         }
 
         private async Task<bool> DownloadFileWithProgressAsync(FileTransferOperation operation, FileTransferQueue queue)
@@ -347,9 +349,11 @@ namespace AdbExplorer.Services
                 }));
             });
 
-            // Call enhanced PullFile with progress
+            // Call enhanced PullFile with progress (use root-aware variant when root mode is on)
             return await Task.Run(() =>
-                _adbService.PullFileWithProgress(operation.SourcePath, operation.DestinationPath, progressCallback, _cancellationTokenSource.Token));
+                _adbService.IsRootMode
+                    ? _adbService.PullFileAsRootWithProgress(operation.SourcePath, operation.DestinationPath, progressCallback, _cancellationTokenSource.Token)
+                    : _adbService.PullFileWithProgress(operation.SourcePath, operation.DestinationPath, progressCallback, _cancellationTokenSource.Token));
         }
 
         private async Task<bool> CopyFileOnDeviceWithProgressAsync(FileTransferOperation operation, FileTransferQueue queue)
@@ -381,7 +385,14 @@ namespace AdbExplorer.Services
             {
                 try
                 {
-                    await Task.Run(() => _adbService.PushFile(localPath, remotePath));
+                    if (_adbService.IsRootMode)
+                    {
+                        await Task.Run(() => _adbService.PushFileAsRoot(localPath, remotePath, true));
+                    }
+                    else
+                    {
+                        await Task.Run(() => _adbService.PushFile(localPath, remotePath));
+                    }
                 }
                 catch
                 {
@@ -396,7 +407,15 @@ namespace AdbExplorer.Services
             bool allSuccess = true;
             foreach (var (remotePath, localPath) in files)
             {
-                bool success = await Task.Run(() => _adbService.PullFile(remotePath, localPath));
+                bool success;
+                if (_adbService.IsRootMode)
+                {
+                    success = await Task.Run(() => _adbService.PullFileAsRoot(remotePath, localPath));
+                }
+                else
+                {
+                    success = await Task.Run(() => _adbService.PullFile(remotePath, localPath));
+                }
                 if (!success) allSuccess = false;
             }
             return allSuccess;

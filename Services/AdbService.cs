@@ -14,10 +14,17 @@ namespace AdbExplorer.Services
     {
         private string adbPath = "adb";
         private string? currentDeviceId;
+        private bool isRootMode = false;
         private readonly HashSet<string> pushMoveWorkaroundDevices = new HashSet<string>(StringComparer.Ordinal);
         private CancellationTokenSource? deviceTrackerCts;
         private Task? deviceTrackerTask;
         private Process? deviceTrackerProcess;
+
+        public bool IsRootMode
+        {
+            get => isRootMode;
+            set => isRootMode = value;
+        }
 
         public AdbService()
         {
@@ -286,7 +293,24 @@ namespace AdbExplorer.Services
             if (string.IsNullOrEmpty(currentDeviceId))
                 throw new InvalidOperationException("No device selected");
 
+            if (isRootMode)
+            {
+                return ExecuteCommand($"-s {currentDeviceId} shell su -c {command}");
+            }
+
             return ExecuteCommand($"-s {currentDeviceId} shell {command}");
+        }
+
+        /// <summary>
+        /// Execute a shell command explicitly as root, regardless of the IsRootMode setting.
+        /// Used for root-aware push/pull staging operations.
+        /// </summary>
+        public string ExecuteRootShellCommand(string command)
+        {
+            if (string.IsNullOrEmpty(currentDeviceId))
+                throw new InvalidOperationException("No device selected");
+
+            return ExecuteCommand($"-s {currentDeviceId} shell su -c {command}");
         }
 
         public string ExecuteCommand(string arguments)
@@ -884,6 +908,191 @@ namespace AdbExplorer.Services
             {
                 return 0;
             }
+        }
+
+        /// <summary>
+        /// Check if the current device has root (su) access.
+        /// Runs 'su -c id' and checks for uid=0 in the output.
+        /// Uses a timeout to handle Magisk/SuperSU permission prompts.
+        /// </summary>
+        public bool CheckDeviceRooted(int timeoutMs = 10000)
+        {
+            if (string.IsNullOrEmpty(currentDeviceId))
+                return false;
+
+            try
+            {
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = adbPath,
+                        Arguments = $"-s {currentDeviceId} shell su -c id",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        StandardOutputEncoding = Encoding.UTF8
+                    }
+                };
+
+                process.Start();
+                string output = process.StandardOutput.ReadToEnd();
+
+                if (!process.WaitForExit(timeoutMs))
+                {
+                    try { process.Kill(); } catch { }
+                    return false;
+                }
+
+                return output.Contains("uid=0");
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Pull a file from a restricted path using root access.
+        /// Copies the file to /data/local/tmp via su, then does a normal adb pull.
+        /// </summary>
+        public bool PullFileAsRoot(string remotePath, string localPath)
+        {
+            if (string.IsNullOrEmpty(currentDeviceId))
+                throw new InvalidOperationException("No device selected");
+
+            string tempPath = GetTempRemotePath();
+
+            try
+            {
+                // Copy from restricted location to temp using su
+                ExecuteRootShellCommand($"cp \"{remotePath}\" \"{tempPath}\"");
+                ExecuteRootShellCommand($"chmod 644 \"{tempPath}\"");
+
+                // Normal pull from temp
+                bool success = PullFile(tempPath, localPath);
+                return success;
+            }
+            finally
+            {
+                // Clean up temp file
+                try { ExecuteRootShellCommand($"rm -f \"{tempPath}\""); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Push a file to a restricted path using root access.
+        /// Pushes to /data/local/tmp, then moves to destination via su.
+        /// </summary>
+        public void PushFileAsRoot(string localPath, string remotePath, bool setPermissions)
+        {
+            if (string.IsNullOrEmpty(currentDeviceId))
+                throw new InvalidOperationException("No device selected");
+
+            if (!System.IO.File.Exists(localPath) && !System.IO.Directory.Exists(localPath))
+                throw new System.IO.FileNotFoundException($"Local file not found: {localPath}");
+
+            string tempPath = GetTempRemotePath();
+
+            // Push to temp (normal adb push, no root needed for /data/local/tmp)
+            var result = RunAdbPush(localPath, tempPath);
+            if (IsPushError(result.ExitCode, result.Error, allowFchownWarning: false))
+            {
+                throw new Exception($"ADB push failed: {result.Error}");
+            }
+
+            // Move from temp to destination using su
+            string moveResult = ExecuteRootShellCommand($"mv -f \"{tempPath}\" \"{remotePath}\"");
+            if (HasShellCommandError(moveResult))
+            {
+                TryDeleteRemotePath(tempPath);
+                throw new Exception($"Root move failed: {moveResult}");
+            }
+
+            if (setPermissions)
+            {
+                try { ExecuteRootShellCommand($"chmod 660 \"{remotePath}\""); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Pull a file from a restricted path using root access, with progress tracking.
+        /// </summary>
+        public bool PullFileAsRootWithProgress(string remotePath, string localPath, IProgress<long> progress, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrEmpty(currentDeviceId))
+                throw new InvalidOperationException("No device selected");
+
+            string tempPath = GetTempRemotePath();
+
+            try
+            {
+                // Copy from restricted location to temp using su
+                ExecuteRootShellCommand($"cp \"{remotePath}\" \"{tempPath}\"");
+                ExecuteRootShellCommand($"chmod 644 \"{tempPath}\"");
+
+                // Pull from temp with progress
+                bool success = PullFileWithProgress(tempPath, localPath, progress, cancellationToken);
+                return success;
+            }
+            finally
+            {
+                // Clean up temp file
+                try { ExecuteRootShellCommand($"rm -f \"{tempPath}\""); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Push a file to a restricted path using root access, with progress tracking.
+        /// </summary>
+        public bool PushFileAsRootWithProgress(string localPath, string remotePath, IProgress<long> progress, CancellationToken cancellationToken, bool setPermissions)
+        {
+            if (string.IsNullOrEmpty(currentDeviceId))
+                throw new InvalidOperationException("No device selected");
+
+            if (!System.IO.File.Exists(localPath) && !System.IO.Directory.Exists(localPath))
+                throw new System.IO.FileNotFoundException($"Local file not found: {localPath}");
+
+            long totalSize = 0;
+            if (System.IO.File.Exists(localPath))
+            {
+                totalSize = new System.IO.FileInfo(localPath).Length;
+            }
+            else if (System.IO.Directory.Exists(localPath))
+            {
+                totalSize = GetDirectorySize(new System.IO.DirectoryInfo(localPath));
+            }
+
+            string tempPath = GetTempRemotePath();
+
+            // Push to temp with progress
+            var result = RunAdbPushWithProgress(localPath, tempPath, progress, cancellationToken, totalSize);
+            if (result.Canceled)
+                return false;
+
+            if (IsPushError(result.ExitCode, result.Error, allowFchownWarning: false))
+            {
+                TryDeleteRemotePath(tempPath);
+                return false;
+            }
+
+            // Move from temp to destination using su
+            string moveResult = ExecuteRootShellCommand($"mv -f \"{tempPath}\" \"{remotePath}\"");
+            if (HasShellCommandError(moveResult))
+            {
+                TryDeleteRemotePath(tempPath);
+                return false;
+            }
+
+            progress?.Report(totalSize);
+
+            if (setPermissions)
+            {
+                try { ExecuteRootShellCommand($"chmod 660 \"{remotePath}\""); } catch { }
+            }
+
+            return true;
         }
     }
 }
