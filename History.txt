@@ -1,6 +1,23 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.5.1 - 2026-02-14
+---------------------------
+- Fixed file operations failing for filenames containing parentheses, spaces,
+  and other shell special characters (e.g. "file (1).epub")
+  * Root cause: ANSI-C $'...' quoting not supported by /system/bin/sh on some
+    Android devices, and double-quote escaping stripped by Windows argv parsing
+  * All shell escaping now uses backslash escaping which survives both Windows
+    argument parsing and works with all Android shells
+  * Fixed su -c command wrapping to pass entire command as single argument
+  * Affects: rename, delete, copy/paste, drag-and-drop, chmod, and all root
+    mode file operations
+- Fixed ls date parsing for files older than 6 months where ls shows year
+  instead of time (e.g. "Jan 15  2024"), which could incorrectly prepend the
+  year to the parsed filename
+- App Drawer: added WSA Settings button to toolbar, removed static
+  "Windows Subsystem for Android" label text
+
 Version 1.5.0 - 2026-02-09
 ---------------------------
 - Added App Drawer for Windows Subsystem for Android (WSA)

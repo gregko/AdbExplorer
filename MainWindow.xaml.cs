@@ -899,7 +899,7 @@ namespace AdbExplorer
                 // First check if the path still exists
                 var checkExists = await Task.Run(() =>
                 {
-                    var result = adbService.ExecuteShellCommand($"test -d \"{path}\" && echo 'exists' || echo 'not found'");
+                    var result = adbService.ExecuteShellCommand($"test -d {EscapeForShell(path)} && echo 'exists' || echo 'not found'");
                     return result.Trim() == "exists";
                 });
 
@@ -3120,10 +3120,21 @@ namespace AdbExplorer
 
         private string EscapeForShell(string path)
         {
-            // For very complex cases, we can use printf to handle the escaping
-            // This handles all special characters including newlines
-            var hexPath = BitConverter.ToString(Encoding.UTF8.GetBytes(path)).Replace("-", "\\x");
-            return "$'\\x" + hexPath + "'";
+            // Escape shell special characters with backslashes.
+            // We can't use double quotes because Windows argv parsing strips them
+            // before ADB receives the arguments, leaving special chars unprotected.
+            // Backslash escaping works directly and survives Windows argv parsing.
+            var sb = new System.Text.StringBuilder(path.Length * 2);
+            foreach (char c in path)
+            {
+                // Characters that need escaping in shell
+                if (" \t\"'$`\\!#&|;(){}[]<>?*~^".IndexOf(c) >= 0)
+                {
+                    sb.Append('\\');
+                }
+                sb.Append(c);
+            }
+            return sb.ToString();
         }
 
         private string currentClipboardTempDir = null;

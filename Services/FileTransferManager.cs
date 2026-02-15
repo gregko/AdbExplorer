@@ -363,8 +363,8 @@ namespace AdbExplorer.Services
             return await Task.Run(() =>
             {
                 string command = operation.IsDirectory
-                    ? $"cp -r \"{operation.SourcePath}\" \"{operation.DestinationPath}\""
-                    : $"cp \"{operation.SourcePath}\" \"{operation.DestinationPath}\"";
+                    ? $"cp -r {_adbService.EscapePathForShell(operation.SourcePath)} {_adbService.EscapePathForShell(operation.DestinationPath)}"
+                    : $"cp {_adbService.EscapePathForShell(operation.SourcePath)} {_adbService.EscapePathForShell(operation.DestinationPath)}";
 
                 var result = _adbService.ExecuteShellCommand(command);
 
@@ -426,7 +426,7 @@ namespace AdbExplorer.Services
             bool allSuccess = true;
             foreach (var (sourcePath, destPath) in files)
             {
-                string command = $"cp \"{sourcePath}\" \"{destPath}\"";
+                string command = $"cp {_adbService.EscapePathForShell(sourcePath)} {_adbService.EscapePathForShell(destPath)}";
                 var result = await Task.Run(() => _adbService.ExecuteShellCommand(command));
                 if (!string.IsNullOrEmpty(result) && result.Contains("error", StringComparison.OrdinalIgnoreCase))
                 {

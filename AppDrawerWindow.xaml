@@ -22,24 +22,32 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="200"/>
-                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0" Name="DeviceLabel" Text="Device"
-                           VerticalAlignment="Center" FontWeight="SemiBold"
-                           Foreground="#333" FontSize="13" Margin="0,0,15,0"/>
+                <Button Grid.Column="0" Content="&#xE115;" ToolTip="WSA Settings"
+                        Width="30" Height="26" Margin="0,0,4,0"
+                        FontFamily="Segoe MDL2 Assets" FontSize="14"
+                        Background="Transparent" BorderBrush="#CCC"
+                        Click="WsaSettingsButton_Click"/>
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,10,0">
+                <Button Grid.Column="1" Content="&#xE72C;" ToolTip="Refresh"
+                        Width="30" Height="26" Margin="0,0,4,0"
+                        FontFamily="Segoe MDL2 Assets" FontSize="14"
+                        Background="Transparent" BorderBrush="#CCC"
+                        Click="RefreshButton_Click"/>
+
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="0,0,10,0">
                     <CheckBox Name="ShowSystemAppsCheckBox" Content="Show system apps"
                               VerticalAlignment="Center"
                               Unchecked="ShowSystemAppsCheckBox_Changed"
                               Checked="ShowSystemAppsCheckBox_Changed"/>
                 </StackPanel>
 
-                <Grid Grid.Column="3">
+                <Grid Grid.Column="4">
                     <TextBox Name="FilterTextBox" VerticalAlignment="Center"
                              TextChanged="FilterTextBox_TextChanged"/>
                     <TextBlock IsHitTestVisible="False" Text="Filter apps..."
@@ -57,12 +65,6 @@
                         </TextBlock.Style>
                     </TextBlock>
                 </Grid>
-
-                <Button Grid.Column="4" Content="&#xE72C;" ToolTip="Refresh"
-                        Width="30" Height="26" Margin="8,0,0,0"
-                        FontFamily="Segoe MDL2 Assets" FontSize="14"
-                        Background="Transparent" BorderBrush="#CCC"
-                        Click="RefreshButton_Click"/>
             </Grid>
         </Border>
 

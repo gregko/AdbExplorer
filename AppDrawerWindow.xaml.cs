@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -41,8 +42,6 @@ namespace AdbExplorer
             appsView = CollectionViewSource.GetDefaultView(apps);
             appsView.Filter = FilterApp;
             AppGrid.ItemsSource = appsView;
-
-            DeviceLabel.Text = "Windows Subsystem for Android";
 
             // Restore window size, position, and checkbox state
             Width = settings.AppDrawerWidth;
@@ -143,6 +142,26 @@ namespace AdbExplorer
         private void RefreshButton_Click(object sender, RoutedEventArgs e)
         {
             LoadApps();
+        }
+
+        // --- WSA Settings ---
+
+        private void WsaSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Launch WSA Settings via its protocol URI
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "wsa-settings://",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not open WSA Settings: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         // --- Click / Long-press / Drag handling ---

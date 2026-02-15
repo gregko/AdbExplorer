@@ -27,9 +27,8 @@ namespace AdbExplorer.Services
                 var resolvedPath = ResolveSymlink(path);
                 System.Diagnostics.Debug.WriteLine($"GetFiles: path={path}, resolvedPath={resolvedPath}");
 
-                // For ls command, we need to escape the path properly
-                // Use double quotes for the ls command as it handles paths better
-                var escapedPath = "\"" + resolvedPath.Replace("\"", "\\\"").Replace("$", "\\$").Replace("`", "\\`") + "\"";
+                // Escape the path for shell use with backslash escaping
+                var escapedPath = EscapePathForShell(resolvedPath);
 
                 // First try: standard ls -la with path
                 var output = adbService.ExecuteShellCommand($"ls -la {escapedPath} 2>&1");
@@ -117,8 +116,7 @@ namespace AdbExplorer.Services
         {
             try
             {
-                // For readlink, use double quotes
-                var escapedPath = "\"" + path.Replace("\"", "\\\"").Replace("$", "\\$").Replace("`", "\\`") + "\"";
+                var escapedPath = EscapePathForShell(path);
 
                 // Try readlink -f first (canonical path resolution)
                 var result = adbService.ExecuteShellCommand($"readlink -f {escapedPath} 2>/dev/null");
@@ -274,7 +272,8 @@ namespace AdbExplorer.Services
                 string name;
 
                 // Try to match date patterns
-                var dateMatch = Regex.Match(remaining, @"^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}|\w{3}\s+\d{1,2}\s+\d{2}:\d{2})\s+(.+)$");
+                // Formats: "2024-01-15 14:23" or "Jan 15 14:23" or "Jan 15  2024"
+                var dateMatch = Regex.Match(remaining, @"^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}|\w{3}\s+\d{1,2}\s+(?:\d{2}:\d{2}|\s?\d{4}))\s+(.+)$");
                 if (dateMatch.Success)
                 {
                     dateStr = dateMatch.Groups[1].Value;
@@ -295,6 +294,7 @@ namespace AdbExplorer.Services
                         name = remaining;
                     }
                 }
+                System.Diagnostics.Debug.WriteLine($"ParseLsLine: remaining='{remaining}', dateStr='{dateStr}', name='{name}'");
 
                 // Handle symlinks
                 string? symlinkTarget = null;
@@ -351,8 +351,7 @@ namespace AdbExplorer.Services
         {
             try
             {
-                // Use double quotes for test command
-                var escapedPath = "\"" + symlinkPath.Replace("\"", "\\\"").Replace("$", "\\$").Replace("`", "\\`") + "\"";
+                var escapedPath = EscapePathForShell(symlinkPath);
                 var result = adbService.ExecuteShellCommand($"test -d {escapedPath} 2>/dev/null && echo 'dir' || echo 'file'");
                 System.Diagnostics.Debug.WriteLine($"IsSymlinkDirectory: test -d {escapedPath} returned: '{result.Trim()}'");
 
@@ -492,72 +491,76 @@ namespace AdbExplorer.Services
 
         public void DeleteItem(string path)
         {
-            // Use the same hex escaping method that works for rename operations
-            // Get directory and generate a simple temporary name  
+            // Get directory and generate a simple temporary name
             var directory = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/');
             if (string.IsNullOrEmpty(directory)) directory = "/sdcard";
             var tempName = $"{directory}/tmpdel_{DateTime.Now.Ticks}";
-            
-            // Check if it's a directory first using hex encoding
+
             var pathEscaped = EscapePathForShell(path);
+
+            // Check if it's a directory
             var checkDir = adbService.ExecuteShellCommand($"test -d {pathEscaped} && echo dir || echo file");
             bool isDirectory = checkDir.Trim() == "dir";
-            
-            // First attempt: Try to rename the file to a simple name using the same method that works
-            // Use hex encoding for the source path and plain quotes for the simple temp name
+
+            // First attempt: rename to a simple name, then delete
             var renameCmd = $"mv {pathEscaped} '{tempName}'";
             var renameResult = adbService.ExecuteShellCommand(renameCmd + " 2>&1");
-            
+
             // Check if rename succeeded (no error output means success)
             if (string.IsNullOrWhiteSpace(renameResult) || (!renameResult.Contains("cannot") && !renameResult.Contains("failed") && !renameResult.Contains("No such")))
             {
-                // Rename succeeded, now delete the file with the simple name
-                string deleteResult;
-                if (isDirectory)
+                // Verify the rename actually happened
+                var tempExists = adbService.ExecuteShellCommand($"test -e '{tempName}' && echo exists || echo missing");
+                if (tempExists.Trim() == "exists")
                 {
-                    deleteResult = adbService.ExecuteShellCommand($"rm -rf '{tempName}' 2>&1");
+                    // Rename succeeded, delete the temp file
+                    string deleteResult;
+                    if (isDirectory)
+                        deleteResult = adbService.ExecuteShellCommand($"rm -rf '{tempName}' 2>&1");
+                    else
+                        deleteResult = adbService.ExecuteShellCommand($"rm -f '{tempName}' 2>&1");
+
+                    var checkDeleted = adbService.ExecuteShellCommand($"test -e '{tempName}' && echo exists || echo gone");
+                    if (checkDeleted.Trim() == "exists")
+                    {
+                        throw new Exception($"Failed to delete renamed file. The file was renamed to {tempName} but could not be deleted. Delete result: {deleteResult}");
+                    }
+                    return;
                 }
-                else
-                {
-                    deleteResult = adbService.ExecuteShellCommand($"rm -f '{tempName}' 2>&1");
-                }
-                
-                // Verify the temp file was deleted
-                var checkDeleted = adbService.ExecuteShellCommand($"test -e '{tempName}' && echo exists || echo gone");
-                if (checkDeleted.Trim() == "exists")
-                {
-                    throw new Exception($"Failed to delete renamed file. The file was renamed to {tempName} but could not be deleted. Delete result: {deleteResult}");
-                }
+                // else: mv produced no error but didn't rename - fall through to direct delete
             }
+
+            // Rename failed or didn't work, try direct deletion
+            string directResult;
+            if (isDirectory)
+                directResult = adbService.ExecuteShellCommand($"rm -rf {pathEscaped} 2>&1");
             else
+                directResult = adbService.ExecuteShellCommand($"rm -f {pathEscaped} 2>&1");
+
+            var checkExists = adbService.ExecuteShellCommand($"test -e {pathEscaped} && echo exists || echo gone");
+            if (checkExists.Trim() == "exists")
             {
-                // Rename failed, try direct deletion using hex encoding
-                string deleteResult;
-                if (isDirectory)
-                {
-                    deleteResult = adbService.ExecuteShellCommand($"rm -rf {pathEscaped} 2>&1");
-                }
-                else  
-                {
-                    deleteResult = adbService.ExecuteShellCommand($"rm -f {pathEscaped} 2>&1");
-                }
-                
-                // Check if the original file still exists
-                var checkExists = adbService.ExecuteShellCommand($"test -e {pathEscaped} && echo exists || echo gone");
-                if (checkExists.Trim() == "exists")
-                {
-                    throw new Exception($"Failed to delete file: {path}. Rename failed with: {renameResult}. Direct delete failed with: {deleteResult}");
-                }
+                throw new Exception($"Failed to delete file: {path}. Rename result: {renameResult}. Delete result: {directResult}");
             }
         }
         
-        // Use the same hex encoding method that works for rename operations
         private string EscapePathForShell(string path)
         {
-            // For very complex cases, we use printf to handle the escaping
-            // This handles all special characters including unicode characters
-            var hexPath = BitConverter.ToString(System.Text.Encoding.UTF8.GetBytes(path)).Replace("-", "\\x");
-            return "$'\\x" + hexPath + "'";
+            // Escape shell special characters with backslashes.
+            // We can't use double quotes because Windows argv parsing strips them
+            // before ADB receives the arguments, leaving special chars unprotected.
+            // Backslash escaping works directly and survives Windows argv parsing.
+            var sb = new System.Text.StringBuilder(path.Length * 2);
+            foreach (char c in path)
+            {
+                // Characters that need escaping in shell
+                if (" \t\"'$`\\!#&|;(){}[]<>?*~^".IndexOf(c) >= 0)
+                {
+                    sb.Append('\\');
+                }
+                sb.Append(c);
+            }
+            return sb.ToString();
         }
 
 

@@ -295,7 +295,7 @@ namespace AdbExplorer.Services
 
             if (isRootMode)
             {
-                return ExecuteCommand($"-s {currentDeviceId} shell su -c {command}");
+                return ExecuteCommand($"-s {currentDeviceId} shell su -c '{EscapeForSingleQuote(command)}'");
             }
 
             return ExecuteCommand($"-s {currentDeviceId} shell {command}");
@@ -310,7 +310,37 @@ namespace AdbExplorer.Services
             if (string.IsNullOrEmpty(currentDeviceId))
                 throw new InvalidOperationException("No device selected");
 
-            return ExecuteCommand($"-s {currentDeviceId} shell su -c {command}");
+            return ExecuteCommand($"-s {currentDeviceId} shell su -c '{EscapeForSingleQuote(command)}'");
+        }
+
+        /// <summary>
+        /// Escape a string for use inside single quotes in a shell command.
+        /// Single quotes don't allow any escapes, so we end the quote, add an escaped single quote,
+        /// and start a new quoted section: ' -> '\''
+        /// </summary>
+        private string EscapeForSingleQuote(string s)
+        {
+            return s.Replace("'", "'\\''");
+        }
+
+        /// <summary>
+        /// Escape a path for use in adb shell commands.
+        /// Uses backslash escaping for shell special characters.
+        /// Double quotes can't be used because Windows argv parsing strips them
+        /// before ADB receives the arguments.
+        /// </summary>
+        public string EscapePathForShell(string path)
+        {
+            var sb = new System.Text.StringBuilder(path.Length * 2);
+            foreach (char c in path)
+            {
+                if (" \t\"'$`\\!#&|;(){}[]<>?*~^".IndexOf(c) >= 0)
+                {
+                    sb.Append('\\');
+                }
+                sb.Append(c);
+            }
+            return sb.ToString();
         }
 
         public string ExecuteCommand(string arguments)
@@ -450,7 +480,7 @@ namespace AdbExplorer.Services
             {
                 try
                 {
-                    ExecuteShellCommand($"chmod 660 \"{remotePath}\"");
+                    ExecuteShellCommand($"chmod 660 {EscapePathForShell(remotePath)}");
                 }
                 catch
                 {
@@ -463,7 +493,7 @@ namespace AdbExplorer.Services
         {
             try
             {
-                ExecuteShellCommand($"chmod {permissions} \"{remotePath}\"");
+                ExecuteShellCommand($"chmod {permissions} {EscapePathForShell(remotePath)}");
             }
             catch
             {
@@ -621,7 +651,7 @@ namespace AdbExplorer.Services
                 {
                     try
                     {
-                        ExecuteShellCommand($"chmod 660 \"{remotePath}\"");
+                        ExecuteShellCommand($"chmod 660 {EscapePathForShell(remotePath)}");
                     }
                     catch { }
                 }
@@ -731,7 +761,7 @@ namespace AdbExplorer.Services
 
             if (localIsDirectory && IsRemoteDirectory(destinationPath))
             {
-                string copyResult = ExecuteShellCommand($"cp -r \"{tempPath}/.\" \"{destinationPath}/\" 2>&1");
+                string copyResult = ExecuteShellCommand($"cp -r {EscapePathForShell(tempPath + "/.")} {EscapePathForShell(destinationPath + "/")} 2>&1");
                 if (HasShellCommandError(copyResult))
                 {
                     errorMessage = copyResult;
@@ -743,7 +773,7 @@ namespace AdbExplorer.Services
             }
             else
             {
-                string moveResult = ExecuteShellCommand($"mv -f \"{tempPath}\" \"{destinationPath}\" 2>&1");
+                string moveResult = ExecuteShellCommand($"mv -f {EscapePathForShell(tempPath)} {EscapePathForShell(destinationPath)} 2>&1");
                 if (HasShellCommandError(moveResult))
                 {
                     errorMessage = moveResult;
@@ -756,7 +786,7 @@ namespace AdbExplorer.Services
             {
                 try
                 {
-                    ExecuteShellCommand($"chmod 660 \"{destinationPath}\"");
+                    ExecuteShellCommand($"chmod 660 {EscapePathForShell(destinationPath)}");
                 }
                 catch
                 {
@@ -770,7 +800,7 @@ namespace AdbExplorer.Services
         {
             try
             {
-                ExecuteShellCommand($"rm -rf \"{remotePath}\"");
+                ExecuteShellCommand($"rm -rf {EscapePathForShell(remotePath)}");
             }
             catch
             {
@@ -806,7 +836,7 @@ namespace AdbExplorer.Services
         {
             try
             {
-                string result = ExecuteShellCommand($"test -d \"{remotePath}\" && echo dir");
+                string result = ExecuteShellCommand($"test -d {EscapePathForShell(remotePath)} && echo dir");
                 return result.Trim().Equals("dir", StringComparison.Ordinal);
             }
             catch
@@ -967,8 +997,8 @@ namespace AdbExplorer.Services
             try
             {
                 // Copy from restricted location to temp using su
-                ExecuteRootShellCommand($"cp \"{remotePath}\" \"{tempPath}\"");
-                ExecuteRootShellCommand($"chmod 644 \"{tempPath}\"");
+                ExecuteRootShellCommand($"cp {EscapePathForShell(remotePath)} {EscapePathForShell(tempPath)}");
+                ExecuteRootShellCommand($"chmod 644 {EscapePathForShell(tempPath)}");
 
                 // Normal pull from temp
                 bool success = PullFile(tempPath, localPath);
@@ -977,7 +1007,7 @@ namespace AdbExplorer.Services
             finally
             {
                 // Clean up temp file
-                try { ExecuteRootShellCommand($"rm -f \"{tempPath}\""); } catch { }
+                try { ExecuteRootShellCommand($"rm -f {EscapePathForShell(tempPath)}"); } catch { }
             }
         }
 
@@ -1003,7 +1033,7 @@ namespace AdbExplorer.Services
             }
 
             // Move from temp to destination using su
-            string moveResult = ExecuteRootShellCommand($"mv -f \"{tempPath}\" \"{remotePath}\"");
+            string moveResult = ExecuteRootShellCommand($"mv -f {EscapePathForShell(tempPath)} {EscapePathForShell(remotePath)}");
             if (HasShellCommandError(moveResult))
             {
                 TryDeleteRemotePath(tempPath);
@@ -1012,7 +1042,7 @@ namespace AdbExplorer.Services
 
             if (setPermissions)
             {
-                try { ExecuteRootShellCommand($"chmod 660 \"{remotePath}\""); } catch { }
+                try { ExecuteRootShellCommand($"chmod 660 {EscapePathForShell(remotePath)}"); } catch { }
             }
         }
 
@@ -1029,8 +1059,8 @@ namespace AdbExplorer.Services
             try
             {
                 // Copy from restricted location to temp using su
-                ExecuteRootShellCommand($"cp \"{remotePath}\" \"{tempPath}\"");
-                ExecuteRootShellCommand($"chmod 644 \"{tempPath}\"");
+                ExecuteRootShellCommand($"cp {EscapePathForShell(remotePath)} {EscapePathForShell(tempPath)}");
+                ExecuteRootShellCommand($"chmod 644 {EscapePathForShell(tempPath)}");
 
                 // Pull from temp with progress
                 bool success = PullFileWithProgress(tempPath, localPath, progress, cancellationToken);
@@ -1039,7 +1069,7 @@ namespace AdbExplorer.Services
             finally
             {
                 // Clean up temp file
-                try { ExecuteRootShellCommand($"rm -f \"{tempPath}\""); } catch { }
+                try { ExecuteRootShellCommand($"rm -f {EscapePathForShell(tempPath)}"); } catch { }
             }
         }
 
@@ -1078,7 +1108,7 @@ namespace AdbExplorer.Services
             }
 
             // Move from temp to destination using su
-            string moveResult = ExecuteRootShellCommand($"mv -f \"{tempPath}\" \"{remotePath}\"");
+            string moveResult = ExecuteRootShellCommand($"mv -f {EscapePathForShell(tempPath)} {EscapePathForShell(remotePath)}");
             if (HasShellCommandError(moveResult))
             {
                 TryDeleteRemotePath(tempPath);
@@ -1089,7 +1119,7 @@ namespace AdbExplorer.Services
 
             if (setPermissions)
             {
-                try { ExecuteRootShellCommand($"chmod 660 \"{remotePath}\""); } catch { }
+                try { ExecuteRootShellCommand($"chmod 660 {EscapePathForShell(remotePath)}"); } catch { }
             }
 
             return true;
