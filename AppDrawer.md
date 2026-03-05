@@ -22,7 +22,6 @@ Core service wrapping ADB commands for app management. Takes `AdbService` in con
 - `GetAppVersionInfo(packageName)` - Parses `dumpsys package` for version info.
 - `OpenAppSettings(packageName)` - Runs `am start -a android.settings.APPLICATION_DETAILS_SETTINGS`.
 - `ForceStopApp(packageName)` - Runs `am force-stop <pkg>`.
-- `UninstallApp(packageName)` - Runs `pm uninstall <pkg>`.
 - `CleanupCache(deviceId, installedPackages)` - Removes cached data for uninstalled apps.
 - `DeriveLabel(packageName)` - Fallback: extracts readable name from package name (e.g., `com.example.myapp` -> `Myapp`).
 
@@ -81,7 +80,7 @@ New WPF Window with:
 
 **Behavior:**
 - **Single click** launches app via `AppService.LaunchApp()`.
-- **Long press** (500ms DispatcherTimer): Shows context menu with Launch, App Info, App Settings, Force Stop, Uninstall.
+- **Long press** (500ms DispatcherTimer): Shows context menu with Launch, App Info, App Settings.
 - **Drag** (mouse move past threshold): Creates temp `.lnk` shortcut, uses `DataObject.SetFileDropList()` + `DragDrop.DoDragDrop()`. Temp files cleaned up on window close.
 - **Filter:** `ICollectionView` filter on label and package name.
 - **Async enrichment:** Apps shown immediately with derived labels and default icons. Labels and icons enriched in background with `SemaphoreSlim(3)` concurrency limit. Progress shown in status bar. Sort by label updated periodically and on completion.
@@ -147,7 +146,7 @@ Added `AppDrawerButton_Click` handler: Gets active device from `DeviceTabControl
 - App Drawer window opens from toolbar button or via `-apps` command line
 - Apps listed with derived labels from package names (immediate)
 - Single click launches apps on device
-- Long-press context menu with App Info, Settings, Force Stop, Uninstall
+- Long-press context menu with App Info, Settings
 - Drag-to-desktop creates `.lnk` shortcuts
 - Filter/search by label or package name
 - `-launch <package>` command-line mode for shortcut execution
@@ -213,7 +212,6 @@ Added `AppDrawerButton_Click` handler: Gets active device from `DeviceTabControl
 | Get app version info | `dumpsys package <pkg>` |
 | Launch app | `monkey -p <pkg> -c android.intent.category.LAUNCHER 1` |
 | App settings screen | `am start -a android.settings.APPLICATION_DETAILS_SETTINGS -d package:<pkg>` |
-| Uninstall | `pm uninstall <pkg>` |
 | Force stop | `am force-stop <pkg>` |
 
 ---

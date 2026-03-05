@@ -120,36 +120,31 @@ namespace AdbExplorer.Services
         }
 
         /// <summary>
-        /// Uninstalls a WSA app using WsaClient.exe.
+        /// Uninstalls a WSA app via ADB and removes its registry key.
+        /// Returns true if the ADB uninstall succeeded.
         /// </summary>
-        public string UninstallApp(string packageName)
+        public bool UninstallApp(string packageName)
         {
             try
             {
-                if (File.Exists(WsaClientPath))
+                var process = Process.Start(new ProcessStartInfo
                 {
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = WsaClientPath,
-                        Arguments = $"/uninstall {packageName}",
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true
-                    };
+                    FileName = "adb",
+                    Arguments = $"uninstall {packageName}",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                });
 
-                    using var process = Process.Start(psi);
-                    if (process != null)
-                    {
-                        process.WaitForExit(10000);
-                        return "Success";
-                    }
-                }
-                return "WsaClient not found";
+                process?.WaitForExit(30000);
             }
-            catch (Exception ex)
-            {
-                return ex.Message;
-            }
+            catch { }
+
+            // Always remove the registry key — the app may already be uninstalled
+            // but the stale key keeps it visible in WSA and App Drawer
+            Registry.CurrentUser.DeleteSubKeyTree($@"{UninstallRegistryPath}\{packageName}", false);
+            return true;
         }
 
         /// <summary>

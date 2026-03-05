@@ -1,6 +1,14 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.5.2 - 2026-03-05
+---------------------------
+- App Drawer: Uninstall now removes the Windows registry entry under
+  HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\[package],
+  so stale app icons no longer persist in WSA and App Drawer after uninstall
+- App Drawer: Uninstall works even when the app was already removed from the
+  device but the registry entry remained, cleaning up leftover icons
+
 Version 1.5.1 - 2026-02-14
 ---------------------------
 - Fixed file operations failing for filenames containing parentheses, spaces,

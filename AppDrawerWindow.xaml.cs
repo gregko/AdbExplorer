@@ -291,35 +291,33 @@ namespace AdbExplorer
 
             menu.Items.Add(new Separator());
 
-            var uninstallItem = new MenuItem { Header = "Uninstall", Foreground = System.Windows.Media.Brushes.Red };
+            var uninstallItem = new MenuItem { Header = "Uninstall" };
             uninstallItem.Click += (s, e) =>
             {
                 var result = MessageBox.Show(
-                    $"Are you sure you want to uninstall {app.Label}?\n\nPackage: {app.PackageName}",
-                    "Uninstall App", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                    $"Uninstall {app.Label} ({app.PackageName})?",
+                    "Confirm Uninstall", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
-                if (result == MessageBoxResult.Yes)
+                if (result != MessageBoxResult.Yes) return;
+
+                try
                 {
-                    try
+                    if (appService.UninstallApp(app.PackageName))
                     {
-                        string output = appService.UninstallApp(app.PackageName);
-                        if (output.Contains("Success", StringComparison.OrdinalIgnoreCase))
-                        {
-                            apps.Remove(app);
-                            UpdateStatusText();
-                            StatusText.Text = $"Uninstalled {app.Label}";
-                        }
-                        else
-                        {
-                            MessageBox.Show($"Uninstall result: {output}",
-                                "Uninstall", MessageBoxButton.OK, MessageBoxImage.Information);
-                        }
+                        apps.Remove(app);
+                        UpdateStatusText();
+                        StatusText.Text = $"Uninstalled {app.Label}";
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        MessageBox.Show($"Failed to uninstall: {ex.Message}",
-                            "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        MessageBox.Show($"Failed to uninstall {app.Label}.",
+                            "Uninstall", MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error uninstalling {app.Label}:\n{ex.Message}",
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             };
             menu.Items.Add(uninstallItem);
