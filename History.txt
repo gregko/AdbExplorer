@@ -1,6 +1,18 @@
 ADB Explorer - Version History
 ==============================
 
+Version 1.5.3 - 2026-05-06
+---------------------------
+- App Drawer: App Settings now opens the WSA per-app settings deep link first,
+  so it works without depending on ADB authorization; the Android settings
+  intent remains as a fallback and now reports ADB errors instead of silently
+  doing nothing
+- App Drawer: Uninstall now removes the Windows registry entry only after ADB
+  reports a successful uninstall, preventing stale registry cleanup from hiding
+  apps that failed to uninstall when ADB is disconnected or unauthorized
+- Installer build script now rebuilds the Release application before packaging
+  so the installer version and bundled app version stay in sync
+
 Version 1.5.2 - 2026-03-05
 ---------------------------
 - App Drawer: Uninstall now removes the Windows registry entry under

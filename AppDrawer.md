@@ -20,7 +20,7 @@ Core service wrapping ADB commands for app management. Takes `AdbService` in con
 - `ExtractFromApk(...)` - Pulls APK via `adb pull`, parses `AndroidManifest.xml` (via `AndroidManifestParser`) to find label/icon resource references, resolves them via `resources.arsc` (via `ArscResourceParser`), extracts icon PNGs from the ZIP, and caches results to disk.
 - `LaunchApp(packageName)` - Uses `monkey -p <pkg> -c android.intent.category.LAUNCHER 1`.
 - `GetAppVersionInfo(packageName)` - Parses `dumpsys package` for version info.
-- `OpenAppSettings(packageName)` - Runs `am start -a android.settings.APPLICATION_DETAILS_SETTINGS`.
+- `OpenAppSettings(packageName)` - Opens `wsa-client://app-settings?package=<pkg>`, with the Android settings intent as an ADB fallback.
 - `ForceStopApp(packageName)` - Runs `am force-stop <pkg>`.
 - `CleanupCache(deviceId, installedPackages)` - Removes cached data for uninstalled apps.
 - `DeriveLabel(packageName)` - Fallback: extracts readable name from package name (e.g., `com.example.myapp` -> `Myapp`).
@@ -80,7 +80,7 @@ New WPF Window with:
 
 **Behavior:**
 - **Single click** launches app via `AppService.LaunchApp()`.
-- **Long press** (500ms DispatcherTimer): Shows context menu with Launch, App Info, App Settings.
+- **Long press** (500ms DispatcherTimer): Shows context menu with Launch, App Info, App Settings, Uninstall.
 - **Drag** (mouse move past threshold): Creates temp `.lnk` shortcut, uses `DataObject.SetFileDropList()` + `DragDrop.DoDragDrop()`. Temp files cleaned up on window close.
 - **Filter:** `ICollectionView` filter on label and package name.
 - **Async enrichment:** Apps shown immediately with derived labels and default icons. Labels and icons enriched in background with `SemaphoreSlim(3)` concurrency limit. Progress shown in status bar. Sort by label updated periodically and on completion.
@@ -211,7 +211,8 @@ Added `AppDrawerButton_Click` handler: Gets active device from `DeviceTabControl
 | Get APK path | `pm path <pkg>` |
 | Get app version info | `dumpsys package <pkg>` |
 | Launch app | `monkey -p <pkg> -c android.intent.category.LAUNCHER 1` |
-| App settings screen | `am start -a android.settings.APPLICATION_DETAILS_SETTINGS -d package:<pkg>` |
+| App settings screen fallback | `am start -a android.settings.APPLICATION_DETAILS_SETTINGS -d package:<pkg>` |
+| Uninstall app | `adb uninstall <pkg>`; registry entry is removed only after ADB reports `Success` |
 | Force stop | `am force-stop <pkg>` |
 
 ---

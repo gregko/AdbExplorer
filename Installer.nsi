@@ -21,16 +21,17 @@ ShowUninstDetails show
 ; Version Information
 
 !define PRODUCT_NAME "ADB Explorer"
-!define PRODUCT_VERSION "1.5.2"
+!define PRODUCT_VERSION "1.5.3"
 !define PRODUCT_PUBLISHER "AdbExplorer Team"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define PRODUCT_UNINST_ROOT_KEY "HKLM"
 
-VIProductVersion "1.5.2.0"
+VIProductVersion "1.5.3.0"
 VIAddVersionKey "ProductName" "${PRODUCT_NAME}"
 VIAddVersionKey "CompanyName" "${PRODUCT_PUBLISHER}"
 VIAddVersionKey "FileDescription" "ADB Explorer Installer"
 VIAddVersionKey "FileVersion" "${PRODUCT_VERSION}"
+VIAddVersionKey "ProductVersion" "${PRODUCT_VERSION}"
 
 ;--------------------------------
 ; Interface Settings

@@ -105,44 +105,72 @@ namespace AdbExplorer.Services
         }
 
         /// <summary>
-        /// Opens the Android app settings screen for the given package.
-        /// Uses ADB since WSA is always ADB-connected when this is called.
+        /// Opens the WSA app settings screen for the given Android package.
         /// </summary>
         public void OpenAppSettings(string packageName)
         {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "adb",
-                Arguments = $"shell am start -a android.settings.APPLICATION_DETAILS_SETTINGS -d package:{packageName}",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
+            if (TryOpenWsaAppSettings(packageName))
+                return;
+
+            OpenAppSettingsViaAdb(packageName);
         }
 
         /// <summary>
-        /// Uninstalls a WSA app via ADB and removes its registry key.
-        /// Returns true if the ADB uninstall succeeded.
+        /// Uninstalls a WSA app via ADB and removes its registry key only after
+        /// ADB reports a successful uninstall.
         /// </summary>
         public bool UninstallApp(string packageName)
         {
-            try
+            using var process = Process.Start(new ProcessStartInfo
             {
-                var process = Process.Start(new ProcessStartInfo
+                FileName = "adb",
+                Arguments = $"uninstall {packageName}",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            });
+
+            if (process == null)
+                throw new InvalidOperationException("Failed to start adb.");
+
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+
+            if (!process.WaitForExit(30000))
+            {
+                try
                 {
-                    FileName = "adb",
-                    Arguments = $"uninstall {packageName}",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                });
+                    process.Kill();
+                }
+                catch
+                {
+                    // Ignore cleanup failure.
+                }
 
-                process?.WaitForExit(30000);
+                throw new TimeoutException("ADB timed out while uninstalling the app.");
             }
-            catch { }
 
-            // Always remove the registry key — the app may already be uninstalled
-            // but the stale key keeps it visible in WSA and App Drawer
+            string output = outputTask.GetAwaiter().GetResult();
+            string error = errorTask.GetAwaiter().GetResult();
+            string details = FormatAdbProcessOutput(output, error);
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    string.IsNullOrEmpty(details)
+                        ? $"adb uninstall exited with code {process.ExitCode}."
+                        : $"adb uninstall failed:{Environment.NewLine}{details}");
+            }
+
+            if (!IsSuccessfulAdbUninstall(output, error))
+            {
+                throw new InvalidOperationException(
+                    string.IsNullOrEmpty(details)
+                        ? "adb uninstall did not report success."
+                        : $"adb uninstall did not report success:{Environment.NewLine}{details}");
+            }
+
             Registry.CurrentUser.DeleteSubKeyTree($@"{UninstallRegistryPath}\{packageName}", false);
             return true;
         }
@@ -190,6 +218,109 @@ namespace AdbExplorer.Services
         }
 
         // ─── Helpers ───────────────────────────────────────────────────────
+
+        public static bool IsSuccessfulAdbUninstall(string output, string error)
+        {
+            return GetAdbProcessMessages(output, error)
+                .Any(message => string.Equals(message, "Success", StringComparison.OrdinalIgnoreCase));
+        }
+
+        public static string GetWsaAppSettingsUri(string packageName)
+        {
+            return $"wsa-client://app-settings?package={Uri.EscapeDataString(packageName)}";
+        }
+
+        private bool TryOpenWsaAppSettings(string packageName)
+        {
+            string uri = GetWsaAppSettingsUri(packageName);
+
+            try
+            {
+                if (File.Exists(WsaClientPath))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = WsaClientPath,
+                        Arguments = $"/deeplink {uri}",
+                        UseShellExecute = false
+                    });
+                }
+                else
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = uri,
+                        UseShellExecute = true
+                    });
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to open WSA app settings deep link: {ex.Message}");
+                return false;
+            }
+        }
+
+        private void OpenAppSettingsViaAdb(string packageName)
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "adb",
+                Arguments = $"shell am start -a android.settings.APPLICATION_DETAILS_SETTINGS -d package:{packageName}",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            });
+
+            if (process == null)
+                throw new InvalidOperationException("Failed to start adb.");
+
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+
+            if (!process.WaitForExit(10000))
+            {
+                try
+                {
+                    process.Kill();
+                }
+                catch
+                {
+                    // Ignore cleanup failure.
+                }
+
+                throw new TimeoutException("ADB timed out while opening app settings.");
+            }
+
+            string output = outputTask.GetAwaiter().GetResult();
+            string error = errorTask.GetAwaiter().GetResult();
+
+            if (process.ExitCode != 0)
+            {
+                string details = FormatAdbProcessOutput(output, error);
+
+                if (string.IsNullOrEmpty(details))
+                    details = $"adb exited with code {process.ExitCode}.";
+
+                throw new InvalidOperationException(details);
+            }
+        }
+
+        private static string FormatAdbProcessOutput(string output, string error)
+        {
+            return string.Join(Environment.NewLine, GetAdbProcessMessages(output, error));
+        }
+
+        private static IEnumerable<string> GetAdbProcessMessages(string output, string error)
+        {
+            return new[] { error, output }
+                .SelectMany(text => text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
+                .Select(message => message.Trim())
+                .Where(message => !string.IsNullOrEmpty(message));
+        }
 
         private ImageSource? LoadIcon(string packageName, string? displayIconPath)
         {
